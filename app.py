@@ -15,6 +15,17 @@ if getattr(sys, "frozen", False):
     # Anything printed goes to a log next to the app's state instead.
     sys.stdout = sys.stderr = open(os.path.join(core.DATA_DIR, "kronos_plus.log"), "w", encoding="utf-8", buffering=1)
 
+    # Unzipping a download with Explorer marks every file as "from the internet", and .NET
+    # then refuses to load our bundled DLLs (pythonnet, WebView2), so the full window can't start.
+    # Clear that mark from our own DLLs only.
+    for folder, _, files in os.walk(sys._MEIPASS):
+        for name in files:
+            if name.lower().endswith(".dll"):
+                try:
+                    os.remove(os.path.join(folder, name) + ":Zone.Identifier")
+                except OSError:
+                    pass
+
 UI = os.path.join(core.APP_DIR, "ui", "index.html")
 ICON = os.path.join(core.APP_DIR, "kronos_plus.ico")
 TITLE = "Kronos Plus"
