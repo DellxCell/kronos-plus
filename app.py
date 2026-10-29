@@ -433,11 +433,52 @@ class Api:
         return None
 
 
+WEBVIEW2_KEY = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+WEBVIEW2_PAGE = "https://developer.microsoft.com/microsoft-edge/webview2/"
+
+
+def webview2_installed():
+    """True when Microsoft Edge WebView2 Runtime is installed (machine-wide or for this user)."""
+    import winreg
+    for hive, path in ((winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\" + WEBVIEW2_KEY),
+                       (winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\" + WEBVIEW2_KEY),
+                       (winreg.HKEY_CURRENT_USER, "Software\\" + WEBVIEW2_KEY)):
+        version = core.read_reg(path, "pv", hive)
+        if version and version != "0.0.0.0":
+            return True
+    return False
+
+
+def classic(missing_webview2=False):
+    """Open the classic window, telling the user why the full one couldn't start."""
+    import traceback
+    traceback.print_exc()  # in the .exe this lands in kronos_plus.log
+    import tkinter as tk
+    from tkinter import messagebox
+    root = tk.Tk()
+    root.withdraw()
+    if missing_webview2:
+        if messagebox.askyesno(
+                TITLE, "Kronos Plus needs Microsoft Edge WebView2 for its full window, "
+                "and it isn't installed on this PC.\n\nIt's free from Microsoft. Open the download page?\n\n"
+                "The classic window opens either way. Restart Kronos Plus after installing."):
+            os.startfile(WEBVIEW2_PAGE)
+    else:
+        messagebox.showwarning(
+            TITLE, "The full window couldn't start, so Kronos Plus opened its classic window.\n\n"
+            "Details are in " + os.path.join(core.DATA_DIR, "kronos_plus.log"))
+    root.destroy()
+    core.run_ui()
+
+
 def main():
+    if not webview2_installed():
+        classic(missing_webview2=True)
+        return
     try:
         import webview
-    except ImportError:
-        core.run_ui()
+    except Exception:
+        classic()
         return
     try:
         # Own taskbar group, so Windows shows our icon instead of Python's.
@@ -455,7 +496,7 @@ def main():
     try:
         webview.start(gui="edgechromium", debug="--debug" in sys.argv)
     except Exception:
-        core.run_ui()
+        classic()
 
 
 if __name__ == "__main__":
