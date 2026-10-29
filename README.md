@@ -4,11 +4,13 @@
 
 A companion app for **Kronos**, the offline BO7 Zombies mod. Manage, fix and make mods from one window.
 
-It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. The only time it goes online is when you install a mod from a Discord link.
+It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. It only goes online to install a mod from a Discord link, and to ask GitHub if there's a new version.
 
 ## Download
 
 Get the latest zip from **[Releases](../../releases)**, unzip the whole `Kronos Plus` folder, and run `Kronos Plus.exe`.
+
+From 1.2 on, the app updates itself: when a new release is out it shows **Update now**.
 
 Every release zip is built by GitHub Actions straight from this code (see the Actions tab), so what you download is what you can read here.
 

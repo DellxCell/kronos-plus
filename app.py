@@ -6,7 +6,10 @@ the classic window.
 """
 
 import os
+import shutil
+import subprocess
 import sys
+import urllib.parse
 
 import kronos_qol as core
 
@@ -29,6 +32,7 @@ if getattr(sys, "frozen", False):
 UI = os.path.join(core.APP_DIR, "ui", "index.html")
 ICON = os.path.join(core.APP_DIR, "kronos_plus.ico")
 TITLE = "Kronos Plus"
+MODS_FORUM = "1564034358094864515/1564893232985415700"  # Kronos Discord server / #mods forum
 
 
 def set_window_icon():
@@ -65,11 +69,45 @@ def set_window_icon():
         user32.PostMessageW(hwnd, 0x80, 1, big)
 
 
+def clipboard_text():
+    """(change counter, text) of the Windows clipboard; text is "" if it holds no text."""
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.GetClipboardData.restype = wintypes.HANDLE
+    kernel32.GlobalLock.argtypes = kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    seq = user32.GetClipboardSequenceNumber()
+    if not user32.OpenClipboard(None):
+        return seq, ""
+    try:
+        handle = user32.GetClipboardData(13)  # CF_UNICODETEXT
+        pointer = kernel32.GlobalLock(handle) if handle else None
+        if not pointer:
+            return seq, ""
+        try:
+            return seq, ctypes.wstring_at(pointer)[:2000]
+        finally:
+            kernel32.GlobalUnlock(handle)
+    finally:
+        user32.CloseClipboard()
+
+
+def open_discord(path):
+    """Open discord.com/channels/<path> in the Discord app if it's installed, else in the browser."""
+    try:
+        os.startfile("discord://-/channels/" + path)
+    except OSError:
+        os.startfile("https://discord.com/channels/" + path)
+
+
 class Api:
     def __init__(self):
         self._state = core.load_state()
         self._tracker = core.SessionTracker(self._state)
         self._window = None
+        self._update = None
+        self._updating = False
 
     # ---------------------------------------------------------- helpers
 
@@ -111,11 +149,42 @@ class Api:
             "history": list(reversed(s["history"])),
             "dark": s["dark"],
             "devMode": s["dev_mode"],
+            "appVersion": core.APP_VERSION,
             "testAlone": s.get("test_alone"),
             "playMinutes": total,
             "sessionCount": len(s["sessions"]),
             "templates": {k: {"label": v["param"][0], "default": v["param"][1]} for k, v in core.TEMPLATES.items()},
         }
+
+    # ---------------------------------------------------------- updates
+
+    def check_update(self):
+        """{"status": "new", "version", "notes"} when a newer release is on GitHub, else "current" or "offline"."""
+        try:
+            self._update = core.latest_release()
+        except ValueError as e:
+            return {"status": "offline", "error": str(e)}
+        if not self._update:
+            return {"status": "current"}
+        return {"status": "new", "version": self._update["version"], "notes": self._update["notes"]}
+
+    def install_update(self):
+        """Download the update, start it, and close this window so it can replace us. Returns an error or None."""
+        if not self._update:
+            return "No update is waiting."
+        if not getattr(sys, "frozen", False):
+            return "Only Kronos Plus.exe updates itself. Running from source? Use git pull."
+        if self._tracker.current:
+            return "Close the game first, then update."
+        try:
+            new_dir = core.download_update(self._update)
+        except ValueError as e:
+            return str(e)
+        subprocess.Popen([os.path.join(new_dir, core.APP_EXE), "--finish-update",
+                          os.path.dirname(sys.executable), str(os.getpid())], cwd=new_dir)
+        self._updating = True
+        self._window.destroy()
+        return None
 
     def set_theme(self, dark):
         self._state["dark"] = bool(dark)
@@ -148,16 +217,27 @@ class Api:
             out.append({"name": n, "ok": ok, "msg": msg})
         return out
 
-    def create_from_template(self, template, name, n):
-        try:
-            core.record_history(self._state, f"Created {name}")
-            core.make_from_template(template, name.strip(), int(n))
-        except ValueError as e:
-            self._state["history"].pop()
-            core.save_state(self._state)
-            return {"ok": False, "error": str(e) or "Enter a whole number."}
-        ok, msg = core.compile_check(name.strip())
-        return {"ok": True, "compiles": ok, "msg": msg}
+    def open_mods_forum(self):
+        open_discord(MODS_FORUM)
+
+    def open_post(self, url):
+        if core.is_post_link(url):
+            open_discord(url.strip().split("/channels/", 1)[1])
+
+    def clipboard_link(self, seen):
+        """A Discord file link copied since change counter `seen`, as {"seq", "link"}.
+
+        The page polls this while it waits for the user to Copy Link on a file in Discord.
+        """
+        seq, text = clipboard_text()
+        text = text.strip()
+        found = seq != seen and seen is not None and urllib.parse.urlsplit(text).hostname in core.LINK_HOSTS
+        if found and self._window:
+            # Pop back in front of Discord so the install steps are seen.
+            self._window.restore()
+            self._window.on_top = True
+            self._window.on_top = False
+        return {"seq": seq, "link": text if found else None}
 
     def pick_mod_files(self):
         import webview
@@ -179,9 +259,22 @@ class Api:
         return msgs
 
     def link_mod(self, url):
-        """Download a mod or pack from a Discord file link; the page then shows the usual install steps."""
+        """Download a mod or pack from a Discord file or post link; the page then shows the usual install steps.
+
+        A post with several mod files returns {"kind": "choose"} so the page can ask which one.
+        """
         import zipfile
         try:
+            if core.is_post_link(url):
+                if not core.POST_HELPER:
+                    return {"kind": "post"}  # the page opens the post and waits for a copied file link
+                post = core.post_files(url)
+                if not post["files"]:
+                    others = f" It only has {', '.join(post['other'])}." if post.get("other") else ""
+                    return {"error": f"“{post.get('title', 'That post')}” has no .zip or .gsc mod file.{others}"}
+                if len(post["files"]) > 1:
+                    return dict(post, kind="choose")
+                url = post["files"][0]["url"]
             p = core.download_mod_link(url)
         except ValueError as e:
             return {"error": str(e)}
@@ -504,7 +597,39 @@ def classic(missing_webview2=False):
     core.run_ui()
 
 
+def finish_update(install_dir, pid):
+    """Run by the new version from its download folder: wait for the old app to close, swap it in, reopen it."""
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
+    if handle:
+        kernel32.WaitForSingleObject(handle, 60000)
+        kernel32.CloseHandle(handle)
+    try:
+        core.replace_app(os.path.dirname(sys.executable), install_dir)
+    except (OSError, ValueError) as e:
+        print("Update failed:", repr(e))
+        ctypes.windll.user32.MessageBoxW(
+            None, f"Kronos Plus couldn't update, so your current version stays.\n\n{e}\n\n"
+            "You can download the new version from GitHub instead.", TITLE, 0x30)
+    subprocess.Popen([os.path.join(install_dir, core.APP_EXE)], cwd=install_dir)
+
+
+def after_update():
+    """On a normal start of the .exe: delete what the last update left behind."""
+    here = os.path.dirname(sys.executable)
+    if not os.path.realpath(here).startswith(os.path.realpath(core.UPDATE_DIR)):
+        shutil.rmtree(core.UPDATE_DIR, ignore_errors=True)
+        core.clean_old_app(here)
+
+
 def main():
+    if "--finish-update" in sys.argv:
+        i = sys.argv.index("--finish-update")
+        finish_update(sys.argv[i + 1], int(sys.argv[i + 2]))
+        return
+    if getattr(sys, "frozen", False):
+        after_update()
     if not webview2_installed():
         classic(missing_webview2=True)
         return
@@ -530,6 +655,8 @@ def main():
         webview.start(gui="edgechromium", debug="--debug" in sys.argv)
     except Exception:
         classic()
+    if api._updating:
+        os._exit(0)  # the new version is waiting for this process to end; don't let a stray thread hold it
 
 
 if __name__ == "__main__":

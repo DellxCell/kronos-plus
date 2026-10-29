@@ -944,11 +944,203 @@ def download_mod_link(url):
     return path
 
 
+# The Kronos Plus helper that turns a #mods post link into that post's files (worker/worker.js).
+# Empty until the helper is set up; then post links work as well as file links.
+POST_HELPER = ""
+POST_LINK = re.compile(r"^https://(?:\w+\.)?discord(?:app)?\.com/channels/\d+/(\d{17,20})(?:/\d+)?/?$")
+
+
+def is_post_link(url):
+    return bool(POST_LINK.match((url or "").strip()))
+
+
+def post_files(url):
+    """Ask the helper for the files attached to a #mods post.
+
+    Returns {"title", "author", "files": [{"name", "url", "size"}], "other": [names]}.
+    Raises ValueError with a message for the user.
+    """
+    if not POST_HELPER:
+        raise ValueError("That's a link to a Discord post, not the file. Open the post, right-click its .zip or "
+                         ".gsc file and choose Copy Link.")
+    thread = POST_LINK.match(url.strip()).group(1)
+    request = urllib.request.Request(f"{POST_HELPER}/post/{thread}", headers={"User-Agent": "KronosPlus"})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as r:
+            body = r.read(1024 * 1024)
+    except urllib.error.HTTPError as e:
+        raise ValueError(_helper_error(e))
+    except (urllib.error.URLError, OSError):
+        raise ValueError("Couldn't look up that post. Check your internet connection and try again.")
+    try:
+        info = json.loads(body)
+    except ValueError:
+        info = None
+    if not isinstance(info, dict) or not isinstance(info.get("files"), list):
+        raise ValueError("Couldn't look up that post. Try again in a minute.")
+    return info
+
+
+def _helper_error(e):
+    """The helper's own explanation of a failed lookup, if it sent one."""
+    try:
+        return str(json.loads(e.read(4096))["error"])
+    except (ValueError, KeyError, TypeError, OSError):
+        return f"Couldn't look up that post (error {e.code}). Try again in a minute."
+
+
 def forget_download(path):
     """Delete a file download_mod_link made (and its temp folder); leaves anything else alone."""
     folder = os.path.dirname(path)
     if os.path.basename(folder).startswith(DOWNLOAD_PREFIX) and os.path.dirname(folder) == tempfile.gettempdir():
         shutil.rmtree(folder, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- updates
+# The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
+APP_VERSION = "1.2"  # releases are numbered 1.2, 1.3, ...
+UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
+UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
+UPDATE_DIR = os.path.join(DATA_DIR, "update")
+MAX_UPDATE_BYTES = 300 * 1024 * 1024
+APP_EXE = "Kronos Plus.exe"
+
+
+def version_tuple(text):
+    m = re.fullmatch(r"v?(\d+(?:\.\d+)*)", (text or "").strip())
+    return tuple(int(n) for n in m.group(1).split(".")) if m else None
+
+
+def latest_release():
+    """The newest release if it's newer than this app: {"version", "url", "size", "sha256", "notes"}, else None.
+
+    Raises ValueError when GitHub can't be asked (no internet, rate limit, odd reply).
+    """
+    request = urllib.request.Request(UPDATE_API, headers={"User-Agent": "KronosPlus",
+                                                          "Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as r:
+            info = json.loads(r.read(2 * 1024 * 1024))
+        newest = version_tuple(info.get("tag_name"))
+        if not newest:
+            raise ValueError("GitHub didn't say which version is newest.")
+        if newest <= version_tuple(APP_VERSION) or info.get("draft") or info.get("prerelease"):
+            return None
+        # The zip is attached by the build a few minutes after the release is published.
+        asset = next((a for a in info.get("assets", []) if a.get("name", "").lower().endswith(".zip")
+                      and a.get("state", "uploaded") == "uploaded"), None)
+        if not asset:
+            return None
+        digest = asset.get("digest") or ""
+        return {"version": info["tag_name"].lstrip("v"), "url": asset["browser_download_url"], "size": asset.get("size"),
+                "sha256": digest[7:].lower() if digest.startswith("sha256:") else None,
+                "notes": (info.get("body") or "")[:3000]}
+    except (urllib.error.URLError, OSError, ValueError, KeyError, TypeError, AttributeError):
+        raise ValueError("Couldn't check for updates. Check your internet connection.")
+
+
+def download_update(release):
+    """Download and unpack a release into UPDATE_DIR; returns the folder holding the new Kronos Plus.exe.
+
+    Raises ValueError with a message for the user.
+    """
+    import hashlib
+    parts = urllib.parse.urlsplit(release["url"])
+    if parts.scheme != "https" or parts.hostname not in UPDATE_HOSTS:
+        raise ValueError("That update isn't on GitHub, so it wasn't downloaded.")
+    shutil.rmtree(UPDATE_DIR, ignore_errors=True)
+    os.makedirs(UPDATE_DIR, exist_ok=True)
+    zip_path = os.path.join(UPDATE_DIR, "update.zip")
+    sha = hashlib.sha256()
+    total = 0
+    request = urllib.request.Request(release["url"], headers={"User-Agent": "KronosPlus"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r, open(zip_path, "wb") as f:
+            if urllib.parse.urlsplit(r.geturl()).hostname not in UPDATE_HOSTS:
+                raise ValueError("The update redirected away from GitHub, so it wasn't downloaded.")
+            while chunk := r.read(1024 * 1024):
+                total += len(chunk)
+                if total > MAX_UPDATE_BYTES:
+                    raise ValueError("The update is far bigger than expected, so it wasn't installed.")
+                sha.update(chunk)
+                f.write(chunk)
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"GitHub refused the download (error {e.code}). Try again in a moment.")
+    except (urllib.error.URLError, OSError):
+        raise ValueError("Couldn't download the update. Check your internet connection and try again.")
+    if release.get("sha256") and sha.hexdigest() != release["sha256"]:
+        raise ValueError("The update didn't download correctly (its checksum doesn't match). Try again.")
+    try:
+        with zipfile.ZipFile(zip_path) as z:
+            root = os.path.realpath(UPDATE_DIR)
+            for member in z.namelist():
+                if not os.path.realpath(os.path.join(root, member)).startswith(root + os.sep):
+                    raise ValueError("The update zip has a bad file path, so it wasn't installed.")
+            z.extractall(root)
+    except zipfile.BadZipFile:
+        raise ValueError("The update didn't download correctly. Try again.")
+    finally:
+        os.remove(zip_path)
+    for folder, _, files in os.walk(UPDATE_DIR):
+        if APP_EXE in files and os.path.isdir(os.path.join(folder, "_internal")):
+            return folder
+    raise ValueError(f"The update doesn't contain {APP_EXE}.")
+
+
+def replace_app(new_dir, install_dir):
+    """Swap the files in install_dir for the ones in new_dir (the app in install_dir must have exited).
+
+    The old exe and _internal are renamed aside first, so a failure puts them back.
+    """
+    if not (os.path.isfile(os.path.join(install_dir, APP_EXE)) and os.path.isdir(os.path.join(install_dir, "_internal"))):
+        raise ValueError(f"{install_dir} doesn't look like a Kronos Plus folder.")
+    names = [n for n in os.listdir(new_dir) if n == "_internal" or os.path.isfile(os.path.join(new_dir, n))]
+    moved = []
+    try:
+        for n in names:
+            old = os.path.join(install_dir, n)
+            if os.path.exists(old):
+                aside = old + ".old"
+                if os.path.isdir(aside):
+                    shutil.rmtree(aside)
+                elif os.path.exists(aside):
+                    os.remove(aside)
+                for attempt in range(20):  # antivirus may still be scanning the old files
+                    try:
+                        os.rename(old, aside)
+                        break
+                    except PermissionError:
+                        if attempt == 19:
+                            raise
+                        time.sleep(0.5)
+                moved.append(n)
+            src = os.path.join(new_dir, n)
+            (shutil.copytree if os.path.isdir(src) else shutil.copy2)(src, old)
+    except OSError:
+        for n in moved:  # put the old version back
+            new = os.path.join(install_dir, n)
+            if os.path.isdir(new):
+                shutil.rmtree(new, ignore_errors=True)
+            elif os.path.exists(new):
+                _try_remove(new)
+            os.rename(new + ".old", new)
+        raise
+    clean_old_app(install_dir)
+
+
+def clean_old_app(install_dir):
+    """Remove what an update left behind: the old files renamed *.old and the downloaded copy."""
+    for n in os.listdir(install_dir):
+        if n.endswith(".old"):
+            p = os.path.join(install_dir, n)
+            shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else _try_remove(p)
+
+
+def _try_remove(p):
+    try:
+        os.remove(p)
+    except OSError:
+        pass
 
 
 def install_pack_files(files, overwrite_names=()):

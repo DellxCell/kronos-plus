@@ -15,12 +15,13 @@ import tempfile
 
 import PyInstaller.__main__
 
+from kronos_qol import APP_VERSION as VER  # the one place the version is set
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = (1, 1, 1, 0)
+VERSION = tuple(int(n) for n in VER.split(".")) + (0, 0)
 NAME = "Kronos Plus"
 CONSOLE = "--console" in sys.argv
 DIST = os.path.join(HERE, "dist-console" if CONSOLE else "dist")
-VER = ".".join(map(str, VERSION[:3]))
 
 version_info = f"""VSVersionInfo(
   ffi=FixedFileInfo(filevers={VERSION}, prodvers={VERSION}),
