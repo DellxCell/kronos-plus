@@ -386,6 +386,7 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
@@ -451,6 +452,7 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
         <div class="menu">
           <button class="btn" id="more-btn"><svg><use href="#i-box"/></svg>Packs</button>
           <div class="menu-pop" id="more-pop">
+            <button data-act="link"><svg><use href="#i-link"/></svg>Install from Discord link…</button>
             <button data-act="add"><svg><use href="#i-plus"/></svg>Add .gsc mods…</button>
             <button data-act="export"><svg><use href="#i-box"/></svg>Export mod pack…</button>
             <button data-act="install"><svg><use href="#i-box"/></svg>Install mod pack…</button>
@@ -788,10 +790,34 @@ $("#new-btn").onclick = () => {
 // packs menu
 $("#more-btn").onclick = e => { e.stopPropagation(); $("#more-pop").classList.toggle("show"); };
 document.addEventListener("click", () => $("#more-pop").classList.remove("show"));
-$$("#more-pop button").forEach(b => b.onclick = () => ({ add: addMods, export: exportPack, install: installPack, folder: () => api.open_scripts_folder() })[b.dataset.act]());
+$$("#more-pop button").forEach(b => b.onclick = () => ({ link: () => linkInstall(), add: () => addMods(), export: exportPack, install: () => installPack(), folder: () => api.open_scripts_folder() })[b.dataset.act]());
 
-async function addMods() {
-  const files = await api.pick_mod_files();
+const DISCORD_FILE = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
+function linkInstall(url = "") {
+  modal(`<h2>Install from a Discord link</h2><div class="body">In Discord, right-click a mod's <b>.gsc</b> or <b>.zip</b> file and choose <b>Copy Link</b>, then paste it here.
+    It gets the same safety check as any other mod before anything is installed.</div>
+    <div class="field"><label for="ln-url">Discord file link</label><input class="input" id="ln-url" placeholder="https://cdn.discordapp.com/attachments/…" value="${esc(url)}"></div>
+    <div id="ln-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="ln-go">Download</button></div>`);
+  $("#ln-url").focus();
+  $("#ln-url").onkeydown = e => { if (e.key === "Enter") $("#ln-go").click(); };
+  $("#ln-go").onclick = async () => {
+    $("#ln-go").disabled = true; $("#ln-go").textContent = "Downloading…";
+    const r = await api.link_mod($("#ln-url").value);
+    if (r.error) { $("#ln-err").textContent = r.error; $("#ln-go").disabled = false; $("#ln-go").textContent = "Download"; return; }
+    closeModal();
+    if (r.kind === "gsc") addMods(r.files, true); else installPack(r, true);
+  };
+}
+// Pasting a Discord file link anywhere outside a text box starts an install.
+document.addEventListener("paste", e => {
+  if (e.target.closest("input, textarea, [contenteditable]") || $("#overlay").classList.contains("show")) return;
+  const text = (e.clipboardData?.getData("text") || "").trim();
+  if (DISCORD_FILE.test(text)) linkInstall(text);
+});
+
+async function addMods(files, fromLink) {
+  files = files || await api.pick_mod_files();
   if (!files.length) return;
   const bad = files.filter(f => f.problem), good = files.filter(f => !f.problem), dup = good.filter(f => f.exists);
   let overwrite = [];
@@ -800,6 +826,7 @@ async function addMods() {
     overwrite = yes ? dup.map(f => f.name) : [];
   }
   const msgs = good.length ? await api.import_files(good.map(f => f.path), overwrite) : [];
+  if (fromLink) files.forEach(f => api.forget_link(f.path));
   modal(`<h2>Add mods</h2><div class="body"><ul>${msgs.concat(bad.map(f => `${f.name}: ${f.problem}`)).map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>
     <div class="actions"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
   refresh();
@@ -809,17 +836,18 @@ async function exportPack() {
   if (!r) return;
   toast(`Saved ${r.included.length} mods to ${r.file}` + (r.skipped.length ? ` (skipped ${r.skipped.length} precompiled)` : ""), "ok");
 }
-async function installPack() {
-  const p = await api.pick_pack();
+async function installPack(p, fromLink) {
+  p = p || await api.pick_pack();
   if (!p) return;
   if (p.error) return toast(p.error, "bad");
   modal(`<h2>Install “${esc(p.name)}”</h2><div class="body">
     ${p.files.length ? `<b>${p.files.length} mods</b> passed the safety check:<div class="pill-list">${p.files.map(f => `<span class="pill">${esc(f)}</span>`).join("")}</div>` : "No usable mods in this pack."}
     ${p.bad.length ? `<div style="color:var(--bad)">Rejected:</div><ul>${p.bad.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
     ${p.existing.length ? `<label class="row"><input type="checkbox" id="pk-over"> Replace ${p.existing.length} existing mod(s) (backed up first)</label>` : ""}
-    <label class="row" style="margin-top:8px"><input type="checkbox" id="pk-preset" checked> Save as preset “${esc(p.name)}”</label></div>
-    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <label class="row" style="margin-top:8px"><input type="checkbox" id="pk-preset" ${fromLink ? "" : "checked"}> Save as preset “${esc(p.name)}”</label></div>
+    <div class="actions"><button class="btn ghost" id="pk-cancel">Cancel</button>
     <button class="btn primary" id="pk-go" ${p.files.length ? "" : "disabled"}>Install</button></div>`);
+  $("#pk-cancel").onclick = () => { if (fromLink) api.forget_link(p.path); closeModal(); };
   $("#pk-go").onclick = async () => {
     const n = await api.install_pack(p.path, $("#pk-over")?.checked ? p.existing : [], $("#pk-preset").checked);
     closeModal(); toast(`Installed ${n} mods`, "ok"); refresh();
