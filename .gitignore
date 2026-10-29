@@ -1,0 +1,8 @@
+__pycache__/
+dist/
+dist-console/
+build/
+*.spec
+state.json
+backups/
+kronos_plus.log
