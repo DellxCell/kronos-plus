@@ -16,7 +16,7 @@ import tempfile
 import PyInstaller.__main__
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = (1, 0, 2, 0)
+VERSION = (1, 1, 0, 0)
 NAME = "Kronos Plus"
 CONSOLE = "--console" in sys.argv
 DIST = os.path.join(HERE, "dist-console" if CONSOLE else "dist")

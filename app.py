@@ -151,12 +151,12 @@ class Api:
     def pick_mod_files(self):
         import webview
         paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("GSC mods (*.gsc)",)) or []
-        result = []
-        for p in paths:
-            problem = core.check_mod_file(p)
-            exists = os.path.exists(os.path.join(core.scripts_dir(), os.path.basename(p)))
-            result.append({"path": p, "name": os.path.basename(p), "problem": problem, "exists": exists})
-        return result
+        return [self._describe_file(p) for p in paths]
+
+    def _describe_file(self, p):
+        problem = core.check_mod_file(p)
+        exists = os.path.exists(os.path.join(core.scripts_dir(), os.path.basename(p)))
+        return {"path": p, "name": os.path.basename(p), "problem": problem, "exists": exists}
 
     def import_files(self, paths, overwrite):
         core.record_history(self._state, "Added mods")
@@ -164,7 +164,26 @@ class Api:
         for p in paths:
             ok, msg = core.import_mod(p, overwrite=os.path.basename(p) in overwrite)
             msgs.append(msg if ok else f"{os.path.basename(p)}: {'skipped (already exists)' if msg == 'exists' else msg}")
+            core.forget_download(p)
         return msgs
+
+    def link_mod(self, url):
+        """Download a mod or pack from a Discord file link; the page then shows the usual install steps."""
+        import zipfile
+        try:
+            p = core.download_mod_link(url)
+        except ValueError as e:
+            return {"error": str(e)}
+        if p.lower().endswith(".gsc"):
+            return {"kind": "gsc", "files": [self._describe_file(p)]}
+        try:
+            return dict(self._describe_pack(p), kind="pack")
+        except zipfile.BadZipFile:
+            core.forget_download(p)
+            return {"error": "That download isn't a valid .zip file."}
+
+    def forget_link(self, path):
+        core.forget_download(path)
 
     def edit_mod(self, name):
         p = core.mod_path(name)
@@ -214,17 +233,20 @@ class Api:
         paths = self._dialog(webview.OPEN_DIALOG, file_types=("Mod pack (*.zip)",))
         if not paths:
             return None
-        p = paths[0]
         try:
-            name, files, bad = core.read_pack(p)
+            return self._describe_pack(paths[0])
         except zipfile.BadZipFile:
             return {"error": "That isn't a valid .zip file."}
+
+    def _describe_pack(self, p):
+        name, files, bad = core.read_pack(p)
         existing = [b for b in files if os.path.exists(os.path.join(core.scripts_dir(), b))]
         mods = sorted(b for b in files if b.lower().endswith(".gsc"))
         return {"path": p, "name": name, "files": mods, "bad": bad, "existing": existing}
 
     def install_pack(self, path, overwrite, make_preset):
         name, files, bad = core.read_pack(path)
+        core.forget_download(path)
         core.record_history(self._state, f"Installed pack {name}")
         core.install_pack_files(files, overwrite)
         mods = [b[:-4] for b in files if b.lower().endswith(".gsc")]

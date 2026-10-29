@@ -4,7 +4,7 @@
 
 A companion app for **Kronos**, the offline BO7 Zombies mod. Manage, fix and make mods from one window.
 
-It only works with files on your PC: it never touches the game while it runs, never goes online, and keeps your Steam install clean.
+It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. The only time it goes online is when you install a mod from a Discord link.
 
 ## Download
 
@@ -18,6 +18,7 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 
 **For players**
 - Mod manager: turn mods on/off, save presets, undo any change
+- Install from Discord: copy a mod's file link in Discord, press Ctrl+V in Kronos Plus, done (safety-checked first)
 - Add mods & packs: drop in .gsc files or install a whole pack in one click
 - Check before you play: every mod is compiled and checked before the game opens
 - Safe mode: all mods off in one click, back on when you're done

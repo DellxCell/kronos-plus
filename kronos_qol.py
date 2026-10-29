@@ -17,6 +17,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import winreg
 import zipfile
 
@@ -867,8 +870,16 @@ def read_pack(zip_path):
                 except ValueError:
                     pass
                 continue
-            if base != info.filename.replace("\\", "/").split("/")[-1] or "/" in info.filename.strip("/"):
-                bad.append(f"{info.filename}: files in subfolders are ignored")
+            # Mods shared online are often zipped inside folders: take each file by its own name.
+            base = info.filename.replace("\\", "/").rstrip("/").split("/")[-1]
+            if base.lower().endswith((".exe", ".dll", ".sys", ".bat", ".cmd", ".ps1", ".scr", ".vbs")):
+                bad.append(f"{info.filename}: programs are never installed. Be careful with any mod that ships one.")
+                continue
+            if not base.lower().endswith((".gsc", MANIFEST_SUFFIX)):
+                bad.append(f"{info.filename}: not a .gsc mod, ignored")
+                continue
+            if base in good:
+                bad.append(f"{info.filename}: another {base} is already in this zip, ignored")
                 continue
             if info.file_size > MAX_MOD_BYTES:
                 bad.append(f"{base}: too large")
@@ -890,6 +901,54 @@ def read_pack(zip_path):
             else:
                 good[base] = data
     return pack_name, good, bad
+
+
+# Only Discord's own file servers: a pasted link can't make the app download from anywhere else.
+LINK_HOSTS = ("cdn.discordapp.com", "media.discordapp.net")
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
+DOWNLOAD_PREFIX = "kronos-plus-dl-"
+
+
+def download_mod_link(url):
+    """Download a .gsc mod or .zip pack from a Discord file link into a temp folder; returns its path.
+
+    Raises ValueError with a message for the user. Nothing is installed here: the caller
+    runs the same safety checks as for files picked from disk.
+    """
+    parts = urllib.parse.urlsplit((url or "").strip())
+    if parts.scheme != "https" or parts.hostname not in LINK_HOSTS:
+        raise ValueError("Paste a Discord file link: right-click the file in Discord and choose Copy Link.")
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", os.path.basename(urllib.parse.unquote(parts.path)))
+    if name.lower().endswith((".rar", ".7z")):
+        raise ValueError(f"{name} is a .rar/.7z archive, which Kronos Plus can't open. Extract it yourself and use "
+                         "Add .gsc mods, or ask the author for a .zip.")
+    if not name.lower().endswith((".gsc", ".zip")):
+        raise ValueError(f"{name or 'That link'} isn't a .gsc mod or a .zip of mods.")
+    request = urllib.request.Request(parts.geturl(), headers={"User-Agent": "KronosPlus"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r:
+            if urllib.parse.urlsplit(r.geturl()).hostname not in LINK_HOSTS:
+                raise ValueError("That link redirected away from Discord, so it wasn't downloaded.")
+            data = r.read(MAX_DOWNLOAD_BYTES + 1)
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404):
+            raise ValueError("Discord says that link has expired. Copy a fresh link from Discord and try again.")
+        raise ValueError(f"Discord refused the download (error {e.code}). Try again in a moment.")
+    except (urllib.error.URLError, OSError):
+        raise ValueError("Couldn't download it. Check your internet connection and try again.")
+    if len(data) > MAX_DOWNLOAD_BYTES:
+        raise ValueError("That file is too large to be a mod.")
+    path = os.path.join(tempfile.mkdtemp(prefix=DOWNLOAD_PREFIX), name)
+    with open(path, "wb") as f:
+        f.write(data)
+    return path
+
+
+def forget_download(path):
+    """Delete a file download_mod_link made (and its temp folder); leaves anything else alone."""
+    folder = os.path.dirname(path)
+    if os.path.basename(folder).startswith(DOWNLOAD_PREFIX) and os.path.dirname(folder) == tempfile.gettempdir():
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def install_pack_files(files, overwrite_names=()):
