@@ -1,0 +1,1437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kronos Plus</title>
+<link rel="icon" href="logo.svg">
+<style>
+:root {
+  --bg: #0d0f13;
+  --bg-2: #12151b;
+  --panel: #171a21;
+  --panel-2: #1d2129;
+  --line: #262b35;
+  --line-2: #313744;
+  --text: #e9ecf1;
+  --text-2: #a7aebb;
+  --text-3: #6e7684;
+  --ember: #ff7a2f;
+  --ember-2: #ffb347;
+  --ember-soft: rgba(255, 122, 47, .14);
+  --ok: #3ccf7f;
+  --ok-soft: rgba(60, 207, 127, .13);
+  --bad: #ff5d5d;
+  --bad-soft: rgba(255, 93, 93, .13);
+  --warn: #f5b942;
+  --warn-soft: rgba(245, 185, 66, .14);
+  --info: #6aa8ff;
+  --info-soft: rgba(106, 168, 255, .13);
+  --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  --radius: 14px;
+  --mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  --code-kw: #ff9a5c; --code-str: #9ad27a; --code-com: #6e7684; --code-num: #e3b5ff; --code-hash: #6ad0ff;
+}
+:root[data-theme="light"] {
+  --bg: #f4f5f8;
+  --bg-2: #eceef3;
+  --panel: #ffffff;
+  --panel-2: #f6f7fa;
+  --line: #e3e6ec;
+  --line-2: #d4d8e0;
+  --text: #171a21;
+  --text-2: #4d5563;
+  --text-3: #8a92a0;
+  --ember-soft: rgba(255, 122, 47, .12);
+  --shadow: 0 10px 30px rgba(20, 24, 40, .10);
+  --code-kw: #c2410c; --code-str: #3f7d20; --code-com: #8a92a0; --code-num: #8e44ad; --code-hash: #0b7bb5;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  display: grid; grid-template-columns: 236px 1fr; overflow: hidden;
+  -webkit-font-smoothing: antialiased; user-select: none;
+}
+::selection { background: var(--ember-soft); }
+button, input, select { font: inherit; color: inherit; }
+svg { width: 18px; height: 18px; flex: none; }
+
+/* ---------- sidebar */
+aside {
+  background: var(--bg-2); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; padding: 18px 14px; gap: 4px; min-height: 0;
+}
+.brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 20px; }
+.logo { width: 38px; height: 38px; filter: drop-shadow(0 5px 12px rgba(255, 122, 47, .35)); }
+.brand b { display: block; font-size: 15px; letter-spacing: .2px; }
+.brand span { font-size: 11.5px; color: var(--text-3); }
+.nav {
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 10px;
+  color: var(--text-2); cursor: pointer; border: 0; background: none; text-align: left; width: 100%;
+  transition: background .15s, color .15s;
+}
+.nav:hover { background: var(--panel); color: var(--text); }
+.nav.active { background: var(--panel-2); color: var(--text); box-shadow: inset 3px 0 0 var(--ember); }
+.nav.active svg { color: var(--ember); }
+.nav .count { margin-left: auto; font-size: 11.5px; color: var(--text-3); background: var(--panel); padding: 1px 7px; border-radius: 99px; }
+.side-foot { margin-top: auto; padding: 12px 8px 0; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.side-foot .path { font-size: 11.5px; color: var(--text-3); word-break: break-all; }
+
+/* ---------- main */
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+header {
+  display: flex; align-items: center; gap: 16px; padding: 20px 28px 16px;
+}
+header h1 { margin: 0; font: 600 22px/1.2 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.2px; }
+header p { margin: 3px 0 0; color: var(--text-3); font-size: 13px; }
+header .spacer { flex: 1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 99px;
+  background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; color: var(--text-2); white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.dot.live { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px transparent; } }
+#banners { padding: 0 28px; display: grid; gap: 8px; }
+.banner { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 11px; font-size: 13px; }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.banner.info { background: var(--info-soft); color: var(--info); }
+.content { flex: 1; overflow: auto; padding: 14px 28px 28px; min-height: 0; }
+.page { display: none; animation: fade .2s ease; }
+.page.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+
+/* ---------- buttons & inputs */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--panel); cursor: pointer; white-space: nowrap;
+  transition: border-color .15s, background .15s, transform .05s;
+}
+.btn:hover { border-color: var(--text-3); background: var(--panel-2); }
+.btn:active { transform: translateY(1px); }
+.btn.sm { height: 30px; padding: 0 11px; font-size: 13px; border-radius: 8px; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn.ghost:hover { background: var(--panel); color: var(--text); }
+.btn.primary {
+  border: 0; color: #1a0d05; font-weight: 600;
+  background: linear-gradient(135deg, var(--ember-2), var(--ember));
+  box-shadow: 0 6px 18px rgba(255, 122, 47, .28);
+}
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.play { height: 42px; padding: 0 20px; font-size: 14.5px; border-radius: 12px; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .45; pointer-events: none; }
+.input {
+  height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel);
+  outline: none; user-select: text; min-width: 0;
+}
+.input:focus { border-color: var(--ember); box-shadow: 0 0 0 3px var(--ember-soft); }
+.search { position: relative; flex: 1; max-width: 340px; }
+.search svg { position: absolute; left: 11px; top: 9px; color: var(--text-3); }
+.search .input { width: 100%; padding-left: 36px; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; cursor: pointer; color: var(--text-2); font-size: 13px; }
+.seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 var(--line-2); }
+
+/* toggle switch */
+.switch { position: relative; width: 40px; height: 23px; flex: none; cursor: pointer; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--line-2); transition: background .2s; }
+.switch span::after {
+  content: ""; position: absolute; left: 3px; top: 3px; width: 17px; height: 17px; border-radius: 50%;
+  background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+.switch input:checked + span { background: var(--ember); }
+.switch input:checked + span::after { transform: translateX(17px); }
+.switch.big { width: 52px; height: 30px; }
+.switch.big span::after { width: 24px; height: 24px; }
+.switch.big input:checked + span::after { transform: translateX(22px); }
+
+/* ---------- cards */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+.card h3 svg { color: var(--ember); }
+.card .sub { color: var(--text-3); font-size: 13px; margin: 0 0 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.stack { display: grid; gap: 16px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.muted { color: var(--text-3); }
+
+/* ---------- mods */
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.presets { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.preset {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 99px;
+  background: var(--panel); border: 1px solid var(--line-2); font-size: 13px; cursor: pointer;
+}
+.preset:hover { border-color: var(--ember); }
+.preset .x { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: var(--text-3); }
+.preset .x:hover { background: var(--bad-soft); color: var(--bad); }
+.preset .x svg { width: 12px; height: 12px; }
+.mods-layout { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1.1fr); gap: 16px; align-items: start; }
+.mod-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.mods-layout > * { min-width: 0; }
+.mod {
+  display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); transition: border-color .15s, background .15s;
+}
+.mod:hover { border-color: var(--line-2); }
+.mod.sel { border-color: var(--ember); background: linear-gradient(90deg, var(--ember-soft), var(--panel) 60%); }
+.mod.off .mod-name { color: var(--text-3); }
+.mod-icon {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none;
+  background: var(--panel-2); color: var(--text-2); font: 700 12px/1 var(--mono);
+}
+.mod-icon.zm { color: var(--ok); background: var(--ok-soft); }
+.mod-icon.mp { color: var(--info); background: var(--info-soft); }
+.mod-icon.pr { color: var(--warn); background: var(--warn-soft); }
+.mod-main { flex: 1; min-width: 0; }
+.mod-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-desc { color: var(--text-3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 10.5px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.detail { position: sticky; top: 0; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
+.detail .code { flex: 1; min-height: 160px; }
+.code {
+  margin: 0; padding: 14px 16px; border-radius: 11px; background: var(--bg); border: 1px solid var(--line);
+  font: 12.5px/1.6 var(--mono); overflow: auto; white-space: pre; user-select: text; tab-size: 4;
+}
+.c-kw { color: var(--code-kw); } .c-str { color: var(--code-str); } .c-com { color: var(--code-com); font-style: italic; }
+.c-num { color: var(--code-num); } .c-hash { color: var(--code-hash); }
+.empty { text-align: center; padding: 48px 20px; color: var(--text-3); }
+.empty svg { width: 40px; height: 40px; color: var(--line-2); margin-bottom: 10px; }
+
+/* ---------- troubleshoot */
+.steps { display: flex; gap: 6px; margin: 4px 0 14px; }
+.steps i { flex: 1; height: 6px; border-radius: 99px; background: var(--line-2); }
+.steps i.done { background: var(--ember); }
+.pill-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.pill { padding: 4px 10px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line-2); font-size: 12.5px; font-family: var(--mono); }
+.timeline { display: grid; gap: 2px; max-height: 300px; overflow: auto; }
+.tl { display: flex; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.tl time { color: var(--text-3); font-size: 12px; width: 110px; flex: none; font-variant-numeric: tabular-nums; }
+
+/* ---------- stats & tables */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.stat b { display: block; font: 600 28px/1.1 "Segoe UI Variable Display", "Segoe UI", sans-serif; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--text-3); font-size: 12.5px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-3); font-weight: 500; font-size: 12px; padding: 0 10px 10px; }
+td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+td.mono { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.bar { height: 8px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--ember-2), var(--bad)); border-radius: 99px; }
+
+/* ---------- settings */
+.setting { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.setting:first-of-type { border-top: 0; }
+.setting > label:first-child { flex: 1; }
+.setting .input { width: 200px; }
+.savebar {
+  position: sticky; bottom: 0; margin-top: 16px; display: none; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--ember); box-shadow: var(--shadow);
+}
+.savebar.show { display: flex; }
+
+/* ---------- logs */
+.logs-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; height: calc(100vh - 190px); }
+.log-files { display: grid; gap: 6px; align-content: start; overflow: auto; }
+.log-file { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 13px; }
+.log-file.sel { border-color: var(--ember); }
+.log-view { display: flex; flex-direction: column; min-height: 0; }
+.log-view .code { flex: 1; }
+.hit { background: var(--bad-soft); color: var(--bad); display: block; margin: 0 -16px; padding: 0 16px; }
+
+/* ---------- health */
+.check { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-top: 1px solid var(--line); }
+.check:first-child { border-top: 0; }
+.badge { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.badge.unk { background: var(--warn-soft); color: var(--warn); }
+.check b { display: block; font-weight: 600; }
+.check span { color: var(--text-2); font-size: 13px; }
+.spin { width: 18px; height: 18px; border: 2px solid var(--line-2); border-top-color: var(--ember); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- studio */
+.studio { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+.proj-list { display: grid; gap: 6px; margin-top: 12px; }
+.proj { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+.proj:hover { border-color: var(--line-2); }
+.proj.sel { border-color: var(--ember); background: linear-gradient(90deg, var(--ember-soft), var(--panel) 70%); }
+.proj b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj small { display: flex; gap: 8px; color: var(--text-3); font-size: 11.5px; margin-top: 2px; }
+.proj .e { color: var(--bad); } .proj .w { color: var(--warn); } .proj .k { color: var(--ok); }
+.proj-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.proj-head h2 { margin: 0; font: 600 19px/1.25 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+.proj-head .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.meta .pill { font-size: 11.5px; }
+.probs { display: grid; gap: 4px; margin-bottom: 12px; max-height: 190px; overflow: auto; }
+.prob { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 9px; background: var(--panel-2); font-size: 13px; }
+.prob[data-line]:not([data-line="0"]) { cursor: pointer; }
+.prob[data-line]:not([data-line="0"]):hover { outline: 1px solid var(--line-2); }
+.prob .where { color: var(--text-3); font-size: 12px; flex: none; width: 52px; font-variant-numeric: tabular-nums; }
+.sev { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; flex: none; }
+.sev.error { background: var(--bad-soft); color: var(--bad); }
+.sev.warning { background: var(--warn-soft); color: var(--warn); }
+.sev.info { background: var(--info-soft); color: var(--info); }
+.sev.ok { background: var(--ok-soft); color: var(--ok); }
+/* built-in editor: a transparent textarea over a highlighted copy of the same text */
+.ed-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+.editor {
+  display: flex; height: calc(100vh - 430px); min-height: 260px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--bg); overflow: hidden; font: 12.5px/20px var(--mono); tab-size: 4;
+}
+.editor:focus-within { border-color: var(--line-2); }
+.ed-gutter { width: 52px; flex: none; overflow: hidden; padding-top: 10px; text-align: right; color: var(--text-3); user-select: none; border-right: 1px solid var(--line); }
+.ed-gutter div { padding-right: 12px; height: 20px; }
+.ed-gutter div.error { color: var(--bad); box-shadow: inset 3px 0 0 var(--bad); }
+.ed-gutter div.warning { color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+.ed-main { position: relative; flex: 1; min-width: 0; }
+.ed-hl, .ed-ta { position: absolute; inset: 0; margin: 0; border: 0; font: inherit; line-height: 20px; tab-size: 4; white-space: pre; }
+.ed-hl { overflow: hidden; pointer-events: none; color: var(--text); }
+.ed-in { display: inline-block; min-width: 100%; padding: 10px 60px 60px 0; }
+.ed-hl .l { padding-left: 14px; min-height: 20px; }
+.ed-hl .l.error { background: var(--bad-soft); } .ed-hl .l.warning { background: var(--warn-soft); }
+.ed-hl .l.flash { background: var(--ember-soft); box-shadow: inset 3px 0 0 var(--ember); }
+.ed-ta {
+  padding: 10px 14px; color: transparent; background: transparent; caret-color: var(--text); resize: none; outline: none;
+  overflow: auto; z-index: 1; user-select: text;
+}
+.ed-ta::selection { background: rgba(255, 122, 47, .3); color: transparent; }
+.ac {
+  position: absolute; z-index: 5; display: none; min-width: 260px; max-width: 520px; max-height: 232px; overflow: auto;
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--shadow); padding: 4px;
+}
+.ac.show { display: block; }
+.ac div { display: flex; justify-content: space-between; gap: 14px; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
+.ac div.on { background: var(--ember-soft); }
+.ac b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac small { color: var(--text-3); font: 11px "Segoe UI", sans-serif; white-space: nowrap; }
+
+/* live console */
+.console {
+  height: calc(100vh - 235px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 11px;
+  padding: 8px 0; font: 12.5px/1.6 var(--mono); user-select: text;
+}
+.crow { display: flex; gap: 12px; padding: 2px 14px; }
+.crow .src { color: var(--text-3); width: 120px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crow .tx { white-space: pre-wrap; word-break: break-word; min-width: 0; }
+.crow.error { background: var(--bad-soft); color: var(--bad); }
+.crow.match .tx { color: var(--ok); }
+.crow.script .tx { color: var(--info); }
+.crow.link { cursor: pointer; } .crow.link:hover .tx { text-decoration: underline; }
+.form { display: grid; gap: 14px; max-width: 620px; }
+.form .field { display: grid; gap: 6px; }
+.form .field > label { font-size: 12.5px; color: var(--text-3); }
+.form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: vertical; font: inherit; line-height: 1.45; }
+.req-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.req-chips label { display: inline-flex; gap: 7px; align-items: center; padding: 5px 11px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--panel-2); font: 12.5px var(--mono); cursor: pointer; }
+.req-chips label:has(input:checked) { border-color: var(--ember); background: var(--ember-soft); }
+.req-chips input { accent-color: var(--ember); margin: 0; }
+.tag.ver { background: var(--panel-2); color: var(--text-3); text-transform: none; letter-spacing: 0; }
+.banner .btn { margin-left: auto; color: inherit; }
+
+/* ---------- modal & toast */
+.overlay {
+  position: fixed; inset: 0; background: rgba(5, 6, 9, .55); backdrop-filter: blur(3px);
+  display: none; place-items: center; z-index: 50; animation: fade .15s;
+}
+.overlay.show { display: grid; }
+.modal {
+  width: min(520px, calc(100vw - 40px)); max-height: calc(100vh - 80px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 18px; box-shadow: var(--shadow); padding: 22px 24px;
+}
+.modal h2 { margin: 0 0 6px; font: 600 18px/1.3 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+.modal .body { color: var(--text-2); margin: 8px 0 18px; }
+.modal .body ul { padding-left: 18px; margin: 8px 0; }
+.modal .field { display: grid; gap: 6px; margin-bottom: 12px; }
+.modal .field label { font-size: 12.5px; color: var(--text-3); }
+.modal .actions { display: flex; justify-content: flex-end; gap: 8px; }
+#toasts { position: fixed; right: 22px; bottom: 22px; display: grid; gap: 8px; z-index: 60; }
+.toast {
+  display: flex; align-items: center; gap: 10px; padding: 11px 15px; border-radius: 12px; min-width: 240px; max-width: 420px;
+  background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: var(--shadow); font-size: 13px;
+  animation: slide .25s ease;
+}
+.toast.ok svg { color: var(--ok); } .toast.bad svg { color: var(--bad); } .toast.info svg { color: var(--ember); }
+@keyframes slide { from { opacity: 0; transform: translateX(12px); } }
+.menu { position: relative; }
+.menu-pop {
+  position: absolute; right: 0; top: 40px; z-index: 20; min-width: 220px; display: none;
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); padding: 6px;
+}
+.menu-pop.show { display: block; }
+.menu-pop button { display: flex; gap: 10px; align-items: center; width: 100%; padding: 9px 10px; border: 0; background: none; border-radius: 8px; cursor: pointer; text-align: left; }
+.menu-pop button:hover { background: var(--panel); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-mods" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 1-5-5L13 2l1.7 4.3Z"/><path d="m3 21 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
+  <symbol id="i-q" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
+</svg>
+
+<aside>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 64 64">
+      <defs><linearGradient id="kp-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffb347"/><stop offset=".55" stop-color="#ff7a2f"/><stop offset="1" stop-color="#d6431a"/>
+      </linearGradient></defs>
+      <rect width="64" height="64" rx="15" fill="url(#kp-bg)"/>
+      <g fill="none" stroke="#1a0d05" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15v35"/><path d="M36 15 19 33"/><path d="M24 28l14 22"/></g>
+      <path d="M50 12v14M43 19h14" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+    <div><b>Kronos Plus</b><span>BO7 Zombies companion</span></div>
+  </div>
+  <button class="nav active" data-page="mods"><svg><use href="#i-mods"/></svg>Mods<span class="count" id="nav-mods">0</span></button>
+  <button class="nav" data-page="studio" id="nav-studio" style="display:none"><svg><use href="#i-code"/></svg>Studio</button>
+  <button class="nav" data-page="console" id="nav-console" style="display:none"><svg><use href="#i-file"/></svg>Console</button>
+  <button class="nav" data-page="trouble"><svg><use href="#i-wrench"/></svg>Troubleshoot</button>
+  <button class="nav" data-page="history"><svg><use href="#i-clock"/></svg>Play history</button>
+  <button class="nav" data-page="settings"><svg><use href="#i-sliders"/></svg>Settings</button>
+  <button class="nav" data-page="logs"><svg><use href="#i-file"/></svg>Logs</button>
+  <button class="nav" data-page="health"><svg><use href="#i-shield"/></svg>Health check<span class="count" id="nav-health">…</span></button>
+  <div class="side-foot">
+    <button class="btn sm ghost" id="theme-btn"><svg><use href="#i-sun"/></svg><span>Light mode</span></button>
+    <div class="path" id="game-dir"></div>
+  </div>
+</aside>
+
+<main>
+  <header>
+    <div>
+      <h1 id="page-title">Mods</h1>
+      <p id="page-sub">Turn mods on and off. Changes apply the next time the game starts.</p>
+    </div>
+    <div class="spacer"></div>
+    <span class="chip"><span class="dot" id="live-dot"></span><span id="live-text">Not playing</span></span>
+    <button class="btn primary play" id="play-btn"><svg><use href="#i-play"/></svg>Play</button>
+  </header>
+  <div id="banners"></div>
+
+  <div class="content">
+    <!-- ================= MODS ================= -->
+    <section class="page active" id="page-mods">
+      <div class="toolbar">
+        <div class="search"><svg><use href="#i-search"/></svg><input class="input" id="search" placeholder="Search mods"></div>
+        <div class="seg" id="filter"><button class="on" data-f="all">All</button><button data-f="on">On</button><button data-f="off">Off</button></div>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn" id="undo-btn" title="Undo last change"><svg><use href="#i-undo"/></svg>Undo</button>
+        <button class="btn" id="compile-btn"><svg><use href="#i-code"/></svg>Check all</button>
+        <div class="menu">
+          <button class="btn" id="more-btn"><svg><use href="#i-box"/></svg>Packs</button>
+          <div class="menu-pop" id="more-pop">
+            <button data-act="add"><svg><use href="#i-plus"/></svg>Add .gsc mods…</button>
+            <button data-act="export"><svg><use href="#i-box"/></svg>Export mod pack…</button>
+            <button data-act="install"><svg><use href="#i-box"/></svg>Install mod pack…</button>
+            <button data-act="folder"><svg><use href="#i-folder"/></svg>Open scripts folder</button>
+          </div>
+        </div>
+        <button class="btn primary" id="new-btn"><svg><use href="#i-plus"/></svg>New mod</button>
+      </div>
+      <div class="presets" id="presets"></div>
+      <div class="mods-layout">
+        <div class="mod-list" id="mod-list"></div>
+        <div class="card detail" id="detail"></div>
+      </div>
+    </section>
+
+    <!-- ================= STUDIO ================= -->
+    <section class="page" id="page-studio">
+      <div class="studio">
+        <div>
+          <button class="btn primary" id="np-btn" style="width:100%;justify-content:center"><svg><use href="#i-plus"/></svg>New project</button>
+          <div class="proj-list" id="proj-list"></div>
+        </div>
+        <div class="card" id="proj-main"></div>
+      </div>
+    </section>
+
+    <!-- ================= CONSOLE ================= -->
+    <section class="page" id="page-console">
+      <div class="toolbar">
+        <div class="search"><svg><use href="#i-search"/></svg><input class="input" id="con-search" placeholder="Filter lines"></div>
+        <div class="seg" id="con-filter"><button class="on" data-f="all">Everything</button><button data-f="error">Errors</button><button data-f="script">Scripts</button><button data-f="match">Matches</button></div>
+        <div style="flex:1"></div>
+        <span class="chip"><span class="dot live" id="con-dot"></span><span id="con-state">Live</span></span>
+        <button class="btn" id="con-pause">Pause</button>
+        <button class="btn" id="con-clear">Clear</button>
+      </div>
+      <div class="console" id="console"></div>
+      <div class="muted" id="con-files" style="font-size:12px;margin-top:8px"></div>
+    </section>
+
+    <!-- ================= TROUBLESHOOT ================= -->
+    <section class="page" id="page-trouble">
+      <div class="grid2">
+        <div class="card">
+          <h3><svg><use href="#i-shield"/></svg>Safe mode</h3>
+          <p class="sub">Game won't start or keeps crashing? Turn every mod off in one click, and bring them all back later.</p>
+          <div class="row"><label class="switch big"><input type="checkbox" id="safe-toggle"><span></span></label><span id="safe-text"></span></div>
+        </div>
+        <div class="card">
+          <h3><svg><use href="#i-bolt"/></svg>Find the crashing mod</h3>
+          <p class="sub">Turns half your mods off at a time. Play a match after each step and say whether it crashed — about 3 tries for 8 mods.</p>
+          <div id="bisect"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><svg><use href="#i-undo"/></svg>Change history</h3>
+        <p class="sub">Every change remembers which mods were on before it.</p>
+        <div class="timeline" id="timeline"></div>
+      </div>
+    </section>
+
+    <!-- ================= HISTORY ================= -->
+    <section class="page" id="page-history">
+      <div class="stats">
+        <div class="stat"><span>Sessions</span><b id="st-sessions">0</b></div>
+        <div class="stat"><span>Time played</span><b id="st-time">0m</b></div>
+        <div class="stat"><span>Crashes</span><b id="st-crashes">0</b></div>
+      </div>
+      <div class="grid2" style="grid-template-columns: 2fr 1fr; align-items:start">
+        <div class="card">
+          <h3><svg><use href="#i-clock"/></svg>Sessions</h3>
+          <p class="sub">Logged automatically while Kronos Plus is open.</p>
+          <div id="sessions"></div>
+        </div>
+        <div class="card">
+          <h3><svg><use href="#i-alert"/></svg>Crash suspects</h3>
+          <p class="sub">Mods most often on when the game crashed.</p>
+          <div id="suspects"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="page" id="page-settings">
+      <div class="grid2" style="align-items:start">
+        <div class="card"><h3><svg><use href="#i-bolt"/></svg>Gameplay</h3><p class="sub">Kronos's own options from settings.json.</p><div id="set-game"></div></div>
+        <div class="card"><h3><svg><use href="#i-sliders"/></svg>Profile &amp; keys</h3><p class="sub">Your in-game name and shortcut keys.</p><div id="set-text"></div></div>
+        <div class="card"><h3><svg><use href="#i-file"/></svg>Logging</h3><p class="sub">Useful when writing or debugging mods.</p><div id="set-log"></div></div>
+        <div class="card"><h3><svg><use href="#i-undo"/></svg>Backups</h3><p class="sub">A copy is saved every time you save.</p>
+          <div class="row"><select class="input" id="backup-sel" style="flex:1"></select><button class="btn" id="restore-btn">Restore</button></div></div>
+        <div class="card"><h3><svg><use href="#i-code"/></svg>Kronos Plus</h3><p class="sub">Options for this app. These apply right away.</p>
+          <div class="setting"><label for="dev-toggle">Developer mode<br><span class="muted" style="font-size:12.5px">Adds Studio: a GSC linter, mod manifests and one-click testing.</span></label>
+            <label class="switch"><input type="checkbox" id="dev-toggle"><span></span></label></div></div>
+      </div>
+      <div class="savebar" id="savebar"><svg style="color:var(--ember)"><use href="#i-alert"/></svg><span style="flex:1">You have unsaved changes. They apply the next time the game starts.</span>
+        <button class="btn ghost" id="discard-btn">Discard</button><button class="btn primary" id="save-btn">Save changes</button></div>
+    </section>
+
+    <!-- ================= LOGS ================= -->
+    <section class="page" id="page-logs">
+      <div class="logs-layout">
+        <div class="log-files" id="log-files"></div>
+        <div class="log-view">
+          <div class="toolbar">
+            <div class="search"><svg><use href="#i-search"/></svg><input class="input" id="log-search" placeholder="Search this log"></div>
+            <div class="seg" id="log-filter"><button class="on" data-f="all">Everything</button><button data-f="hits">Errors &amp; scripts</button></div>
+            <div style="flex:1"></div>
+            <button class="btn" id="log-refresh"><svg><use href="#i-refresh"/></svg>Refresh</button>
+          </div>
+          <pre class="code" id="log-view"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= HEALTH ================= -->
+    <section class="page" id="page-health">
+      <div class="card" id="health"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="health-run"><svg><use href="#i-refresh"/></svg>Run checks again</button>
+        <button class="btn" id="handled-btn">Mark Steam update as handled</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div id="toasts"></div>
+
+<script>
+let api = null;
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const icon = id => `<svg><use href="#i-${id}"/></svg>`;
+const S = { ov: null, selected: null, filter: "all", settings: null, dirty: {}, log: null, logFilter: "all" };
+
+const PAGES = {
+  mods: ["Mods", "Turn mods on and off. Changes apply the next time the game starts."],
+  studio: ["Studio", "Build mods: lint, manifest, and test one mod on its own."],
+  console: ["Console", "Kronos's logs, crashes and match results as they happen."],
+  trouble: ["Troubleshoot", "Safe mode, a crash finder and undo for every change."],
+  history: ["Play history", "Every Kronos session while this app is open."],
+  settings: ["Settings", "Kronos's settings.json, without hand-editing."],
+  logs: ["Logs", "Kronos's logs and crash reports, with errors highlighted."],
+  health: ["Health check", "Make sure your setup is safe before you play."],
+};
+
+// ---------------------------------------------------------- ui helpers
+function toast(text, kind = "info") {
+  const t = document.createElement("div");
+  t.className = `toast ${kind}`;
+  t.innerHTML = icon(kind === "ok" ? "check" : kind === "bad" ? "alert" : "bolt") + `<span>${esc(text)}</span>`;
+  $("#toasts").append(t);
+  setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 0; setTimeout(() => t.remove(), 300); }, 3200);
+}
+function modal(html) {
+  $("#modal").innerHTML = html;
+  $("#overlay").classList.add("show");
+  const first = $("#modal input"); if (first) setTimeout(() => first.focus(), 30);
+}
+function closeModal() { $("#overlay").classList.remove("show"); }
+$("#overlay").addEventListener("mousedown", e => { if (e.target.id === "overlay") closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+function confirmBox(title, body, okText = "OK", danger = false) {
+  return new Promise(res => {
+    modal(`<h2>${esc(title)}</h2><div class="body">${body}</div><div class="actions">
+      <button class="btn ghost" id="m-no">Cancel</button><button class="btn ${danger ? "" : "primary"}" id="m-yes">${esc(okText)}</button></div>`);
+    $("#m-no").onclick = () => { closeModal(); res(false); };
+    $("#m-yes").onclick = () => { closeModal(); res(true); };
+  });
+}
+function highlight(code) {
+  const re = /(\/\/[^\n]*)|(#"[^"\n]*")|("(?:[^"\\\n]|\\.)*")|\b(autoexec|function|if|else|for|foreach|in|while|return|wait|waittill|thread|endon|notify|self|level|isdefined|true|false|undefined|break|continue|switch|case|default)\b|\b(\d+(?:\.\d+)?)\b|(#using[^\n]*)/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    const cls = m[1] ? "com" : m[2] ? "hash" : m[3] ? "str" : m[4] ? "kw" : m[5] ? "num" : "com";
+    out += `<span class="c-${cls}">${esc(m[0])}</span>`;
+    last = re.lastIndex;
+  }
+  return out + esc(code.slice(last));
+}
+const modKind = m => m.prepared ? ["pr", "PR"] : m.name.startsWith("zm_") ? ["zm", "ZM"] : m.name.startsWith("mp_") ? ["mp", "MP"] : ["", "GSC"];
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+
+// ---------------------------------------------------------- navigation
+function go(page) {
+  $$(".nav").forEach(n => n.classList.toggle("active", n.dataset.page === page));
+  $$(".page").forEach(p => p.classList.toggle("active", p.id === "page-" + page));
+  $("#page-title").textContent = PAGES[page][0];
+  $("#page-sub").textContent = PAGES[page][1];
+  clearInterval(CON.timer);
+  if (page === "console") { pollConsole(); CON.timer = setInterval(pollConsole, 1500); }
+  ({ studio: loadStudio, history: loadSessions, settings: loadSettings, logs: loadLogs, health: loadHealth, trouble: renderTrouble }[page] || (() => {}))();
+}
+$$(".nav").forEach(n => n.onclick = () => go(n.dataset.page));
+
+// ---------------------------------------------------------- overview & mods
+async function refresh() {
+  S.ov = await api.overview();
+  document.documentElement.dataset.theme = S.ov.dark ? "dark" : "light";
+  $("#theme-btn").innerHTML = S.ov.dark ? icon("sun") + "<span>Light mode</span>" : icon("moon") + "<span>Dark mode</span>";
+  $("#game-dir").textContent = S.ov.gameDir;
+  $("#nav-mods").textContent = `${S.ov.enabledCount}/${S.ov.mods.length}`;
+  $("#banners").innerHTML = S.ov.banners.map(b => `<div class="banner ${b.kind}">${icon(b.kind === "warn" ? "alert" : "bolt")}<span>${esc(b.text)}</span>
+    ${b.action === "stop-test" ? `<button class="btn sm" data-act="stop-test">${icon("undo")}Restore my mods now</button>` : ""}</div>`).join("");
+  const st = $('#banners [data-act="stop-test"]');
+  if (st) st.onclick = async () => { await api.stop_test(); toast("Your mods are back", "ok"); refresh(); if ($("#page-studio.active")) loadStudio(); };
+  $("#nav-studio").style.display = $("#nav-console").style.display = S.ov.devMode ? "" : "none";
+  $("#dev-toggle").checked = S.ov.devMode;
+  if (!S.ov.devMode && ($("#page-studio.active") || $("#page-console.active"))) go("mods");
+  renderPresets(); renderMods(); renderTrouble();
+}
+
+function renderPresets() {
+  const el = $("#presets");
+  el.innerHTML = `<span class="muted" style="font-size:12.5px;margin-right:2px">Presets</span>` +
+    S.ov.presets.map(p => `<span class="preset" data-p="${esc(p)}" title="${esc((S.ov.presetMods[p] || []).join(", "))}">${esc(p)}<span class="x" data-del="${esc(p)}">${icon("x")}</span></span>`).join("") +
+    `<button class="btn sm ghost" id="save-preset">${icon("plus")}Save current</button>`;
+  $$(".preset", el).forEach(c => c.onclick = async e => {
+    if (e.target.closest(".x")) {
+      if (await confirmBox("Delete preset?", `Delete <b>${esc(c.dataset.p)}</b>? Your mods won't change.`, "Delete", true)) {
+        await api.delete_preset(c.dataset.p); refresh();
+      }
+      return;
+    }
+    await api.apply_preset(c.dataset.p); toast(`Applied preset ${c.dataset.p}`, "ok"); refresh();
+  });
+  $("#save-preset").onclick = () => {
+    modal(`<h2>Save preset</h2><div class="body">Saves the ${S.ov.enabledCount} mods that are on now.</div>
+      <div class="field"><label>Name</label><input class="input" id="pname" placeholder="e.g. Easy start"></div>
+      <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="psave">Save</button></div>`);
+    const save = async () => { if (await api.save_preset($("#pname").value)) { closeModal(); toast("Preset saved", "ok"); refresh(); } };
+    $("#psave").onclick = save; $("#pname").onkeydown = e => e.key === "Enter" && save();
+  };
+}
+
+function renderMods() {
+  const q = $("#search").value.toLowerCase().trim();
+  const mods = S.ov.mods.filter(m => (S.filter === "all" || (S.filter === "on") === m.enabled) &&
+    (!q || m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q)));
+  const list = $("#mod-list");
+  if (!mods.length) {
+    list.innerHTML = `<div class="empty">${icon("mods")}<div>${S.ov.mods.length ? "No mods match." : "No mods yet. Click New mod to make one."}</div></div>`;
+  } else {
+    list.innerHTML = mods.map(m => {
+      const [k, label] = modKind(m);
+      return `<div class="mod ${m.enabled ? "" : "off"} ${S.selected === m.name ? "sel" : ""}" data-n="${esc(m.name)}">
+        <div class="mod-icon ${k}">${label}</div>
+        <div class="mod-main"><div class="mod-name">${esc(m.name)}${m.version ? `<span class="tag ver">v${esc(m.version)}</span>` : ""}${m.prepared ? '<span class="tag warn">Precompiled</span>' : ""}</div>
+        <div class="mod-desc">${esc(m.desc || (m.enabled ? "On" : "Off"))}</div></div>
+        <label class="switch" title="${m.enabled ? "Turn off" : "Turn on"}"><input type="checkbox" ${m.enabled ? "checked" : ""}><span></span></label></div>`;
+    }).join("");
+  }
+  $$(".mod", list).forEach(row => {
+    row.onclick = e => { if (!e.target.closest(".switch")) { S.selected = row.dataset.n; renderMods(); } };
+    $("input", row).onchange = async e => {
+      await api.set_mods([row.dataset.n], e.target.checked);
+      toast(`${row.dataset.n} turned ${e.target.checked ? "on" : "off"}`, "ok");
+      refresh();
+    };
+  });
+  renderDetail();
+}
+
+async function renderDetail() {
+  const el = $("#detail");
+  const m = S.ov.mods.find(x => x.name === S.selected);
+  if (!m) {
+    el.innerHTML = `<div class="empty">${icon("code")}<div>Select a mod to see its code.</div></div>`;
+    return;
+  }
+  const src = await api.source(m.name);
+  if (S.selected !== m.name) return;
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">${esc(m.name)}</h3>
+      <label class="switch"><input type="checkbox" id="d-toggle" ${m.enabled ? "checked" : ""}><span></span></label></div>
+    <p class="sub">${m.prepared ? "Precompiled mod — the readable file is only a stub, the real code can't be shown or checked." : esc(m.desc || "No description.")}</p>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn sm" id="d-edit">${icon("edit")}Edit in Notepad</button>
+      ${m.prepared ? "" : `<button class="btn sm" id="d-check">${icon("code")}Check it compiles</button>`}
+      ${m.prepared || !S.ov.devMode ? "" : `<button class="btn sm" id="d-studio">${icon("bolt")}Open in Studio</button>`}
+      <span id="d-result" class="muted" style="font-size:13px"></span>
+    </div>
+    <pre class="code">${highlight(src)}</pre>`;
+  $("#d-toggle").onchange = async e => { await api.set_mods([m.name], e.target.checked); refresh(); };
+  $("#d-edit").onclick = () => api.edit_mod(m.name);
+  const ds = $("#d-studio"); if (ds) ds.onclick = () => { S.proj = m.name; go("studio"); };
+  const chk = $("#d-check");
+  if (chk) chk.onclick = async () => {
+    $("#d-result").innerHTML = '<span class="spin" style="display:inline-block;vertical-align:-4px"></span>';
+    const [r] = await api.compile([m.name]);
+    $("#d-result").innerHTML = r.ok ? `<span style="color:var(--ok)">✔ Compiles</span>` : `<span style="color:var(--bad)">✖ ${esc(r.msg)}</span>`;
+  };
+}
+
+$("#search").oninput = renderMods;
+$$("#filter button").forEach(b => b.onclick = () => {
+  S.filter = b.dataset.f; $$("#filter button").forEach(x => x.classList.toggle("on", x === b)); renderMods();
+});
+$("#undo-btn").onclick = async () => {
+  const a = await api.undo(); toast(a ? `Undid: ${a}` : "Nothing to undo", a ? "ok" : "info"); refresh();
+};
+$("#compile-btn").onclick = async () => {
+  modal(`<h2>Checking mods…</h2><div class="body row"><span class="spin"></span>Compiling with Kronos's compiler</div>`);
+  const res = await api.compile([]);
+  const bad = res.filter(r => r.ok === false).length;
+  modal(`<h2>${bad ? `${bad} mod${bad > 1 ? "s" : ""} won't compile` : "All mods compile"}</h2><div class="body">
+    ${res.map(r => `<div class="check"><div class="badge ${r.ok === true ? "ok" : r.ok === false ? "bad" : "unk"}">${icon(r.ok === true ? "check" : r.ok === false ? "x" : "q")}</div>
+    <div><b>${esc(r.name)}</b><span>${esc(r.msg)}</span></div></div>`).join("")}</div>
+    <div class="actions"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
+};
+
+// new mod from template
+$("#new-btn").onclick = () => {
+  const names = Object.keys(S.ov.templates);
+  modal(`<h2>New mod</h2><div class="body">Pick a template, give it a name, and it's ready for your next game.</div>
+    <div class="field"><label>Template</label><select class="input" id="t-tpl">${names.map(n => `<option>${esc(n)}</option>`).join("")}</select></div>
+    <div class="field"><label>Mod name</label><input class="input" id="t-name" value="zm_my_mod"></div>
+    <div class="field"><label id="t-label"></label><input class="input" id="t-num" type="number" min="0" step="100"></div>
+    <div id="t-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="t-go">Create</button></div>`);
+  const sync = () => { const t = S.ov.templates[$("#t-tpl").value]; $("#t-label").textContent = t.label; $("#t-num").value = t.default; };
+  $("#t-tpl").onchange = sync; sync();
+  $("#t-go").onclick = async () => {
+    $("#t-go").disabled = true;
+    const r = await api.create_from_template($("#t-tpl").value, $("#t-name").value, $("#t-num").value);
+    if (!r.ok) { $("#t-err").textContent = r.error; $("#t-go").disabled = false; return; }
+    closeModal(); S.selected = $("#t-name")?.value || S.selected;
+    toast(r.compiles ? "Mod created — it compiles" : `Created, but: ${r.msg}`, r.compiles ? "ok" : "bad");
+    refresh();
+  };
+};
+
+// packs menu
+$("#more-btn").onclick = e => { e.stopPropagation(); $("#more-pop").classList.toggle("show"); };
+document.addEventListener("click", () => $("#more-pop").classList.remove("show"));
+$$("#more-pop button").forEach(b => b.onclick = () => ({ add: addMods, export: exportPack, install: installPack, folder: () => api.open_scripts_folder() })[b.dataset.act]());
+
+async function addMods() {
+  const files = await api.pick_mod_files();
+  if (!files.length) return;
+  const bad = files.filter(f => f.problem), good = files.filter(f => !f.problem), dup = good.filter(f => f.exists);
+  let overwrite = [];
+  if (dup.length) {
+    const yes = await confirmBox("Replace existing mods?", `These already exist: <ul>${dup.map(f => `<li>${esc(f.name)}</li>`).join("")}</ul>The old versions are backed up first.`, "Replace");
+    overwrite = yes ? dup.map(f => f.name) : [];
+  }
+  const msgs = good.length ? await api.import_files(good.map(f => f.path), overwrite) : [];
+  modal(`<h2>Add mods</h2><div class="body"><ul>${msgs.concat(bad.map(f => `${f.name}: ${f.problem}`)).map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>
+    <div class="actions"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
+  refresh();
+}
+async function exportPack() {
+  const r = await api.export_pack();
+  if (!r) return;
+  toast(`Saved ${r.included.length} mods to ${r.file}` + (r.skipped.length ? ` (skipped ${r.skipped.length} precompiled)` : ""), "ok");
+}
+async function installPack() {
+  const p = await api.pick_pack();
+  if (!p) return;
+  if (p.error) return toast(p.error, "bad");
+  modal(`<h2>Install “${esc(p.name)}”</h2><div class="body">
+    ${p.files.length ? `<b>${p.files.length} mods</b> passed the safety check:<div class="pill-list">${p.files.map(f => `<span class="pill">${esc(f)}</span>`).join("")}</div>` : "No usable mods in this pack."}
+    ${p.bad.length ? `<div style="color:var(--bad)">Rejected:</div><ul>${p.bad.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
+    ${p.existing.length ? `<label class="row"><input type="checkbox" id="pk-over"> Replace ${p.existing.length} existing mod(s) (backed up first)</label>` : ""}
+    <label class="row" style="margin-top:8px"><input type="checkbox" id="pk-preset" checked> Save as preset “${esc(p.name)}”</label></div>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn primary" id="pk-go" ${p.files.length ? "" : "disabled"}>Install</button></div>`);
+  $("#pk-go").onclick = async () => {
+    const n = await api.install_pack(p.path, $("#pk-over")?.checked ? p.existing : [], $("#pk-preset").checked);
+    closeModal(); toast(`Installed ${n} mods`, "ok"); refresh();
+  };
+}
+
+// ---------------------------------------------------------- troubleshoot
+function renderTrouble() {
+  if (!S.ov) return;
+  $("#safe-toggle").checked = S.ov.safeMode;
+  $("#safe-text").innerHTML = S.ov.safeMode ? "<b>On</b> <span class='muted'>— every mod is off</span>" : "<span class='muted'>Off — your mods load normally</span>";
+  const b = S.ov.bisect, el = $("#bisect");
+  if (!b) {
+    el.innerHTML = `<button class="btn primary" id="b-start">${icon("bolt")}Start crash search</button>`;
+    $("#b-start").onclick = async () => { const err = await api.bisect_start(); err ? toast(err, "bad") : toast("Crash search started", "ok"); refresh(); };
+  } else {
+    const total = Math.max(1, Math.ceil(Math.log2(b.original.length)));
+    el.innerHTML = `<div class="steps">${Array.from({ length: total }, (_, i) => `<i class="${i < b.round ? "done" : ""}"></i>`).join("")}</div>
+      <div>Round ${b.round} — only these are on now:</div>
+      <div class="pill-list">${b.testing.map(m => `<span class="pill">${esc(m)}</span>`).join("")}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:12px">Play a Zombies match, then tell us what happened.</div>
+      <div class="row"><button class="btn" id="b-crash" style="color:var(--bad)">It crashed</button><button class="btn" id="b-ok" style="color:var(--ok)">No crash</button>
+      <div style="flex:1"></div><button class="btn ghost" id="b-cancel">Cancel &amp; restore</button></div>`;
+    const answer = async crashed => {
+      const culprit = await api.bisect_answer(crashed);
+      if (culprit) modal(`<h2>Found it</h2><div class="body">Most likely culprit: <b>${esc(culprit)}</b><br><br>Your original mods are back on. Turn that one off on the Mods page.</div>
+        <div class="actions"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
+      refresh();
+    };
+    $("#b-crash").onclick = () => answer(true);
+    $("#b-ok").onclick = () => answer(false);
+    $("#b-cancel").onclick = async () => { await api.bisect_cancel(); toast("Crash search cancelled, mods restored", "ok"); refresh(); };
+  }
+  $("#timeline").innerHTML = S.ov.history.length ? S.ov.history.map((h, i) =>
+    `<div class="tl"><time>${esc(h.time)}</time><span style="flex:1">${esc(h.action)}</span>${i === 0 ? `<button class="btn sm" id="tl-undo">${icon("undo")}Undo</button>` : ""}</div>`).join("")
+    : `<div class="empty" style="padding:20px">No changes yet.</div>`;
+  const u = $("#tl-undo"); if (u) u.onclick = () => $("#undo-btn").click();
+}
+$("#safe-toggle").onchange = async e => {
+  const err = await api.safe_mode(e.target.checked);
+  err ? toast(err, "bad") : toast(e.target.checked ? "Safe mode on — all mods off" : "Mods restored", "ok");
+  refresh();
+};
+
+// ---------------------------------------------------------- history
+async function loadSessions() {
+  const d = await api.sessions();
+  $("#st-sessions").textContent = d.sessions.length;
+  $("#st-time").textContent = fmtMin(d.minutes);
+  $("#st-crashes").textContent = d.crashes;
+  $("#sessions").innerHTML = d.sessions.length ? `<table><tr><th>Started</th><th>Length</th><th>Crash</th><th>Mods on</th></tr>` +
+    d.sessions.map(s => `<tr><td>${esc(s.start)}</td><td>${fmtMin(s.minutes)}</td><td>${s.crash ? '<span style="color:var(--bad)">Yes</span>' : '<span class="muted">—</span>'}</td>
+    <td class="mono">${esc(s.mods.join(", "))}</td></tr>`).join("") + `</table>`
+    : `<div class="empty">${icon("clock")}<div>No sessions yet. Keep this app open while you play.</div></div>`;
+  $("#suspects").innerHTML = d.suspects.length ? d.suspects.map(s => `<div style="margin-bottom:12px"><div class="row" style="justify-content:space-between">
+    <span class="mono" style="font-family:var(--mono);font-size:12.5px">${esc(s.name)}</span><span class="muted" style="font-size:12px">${Math.round(s.rate * 100)}% of ${s.count}</span></div>
+    <div class="bar"><i style="width:${Math.round(s.rate * 100)}%"></i></div></div>`).join("")
+    : `<div class="empty" style="padding:24px">${icon("check")}<div>No crashes recorded.</div></div>`;
+}
+
+// ---------------------------------------------------------- settings
+async function loadSettings() {
+  const d = await api.settings();
+  if (d.error) { $("#set-game").innerHTML = `<div style="color:var(--bad)">${esc(d.error)}</div>`; return; }
+  S.settings = d; S.dirty = {};
+  const flag = f => `<div class="setting"><label for="s-${f.key}">${esc(f.label)}</label><label class="switch"><input type="checkbox" id="s-${f.key}" data-k="${f.key}" ${f.value ? "checked" : ""}><span></span></label></div>`;
+  $("#set-game").innerHTML = d.flags.filter(f => !f.key.startsWith("logging")).map(flag).join("");
+  $("#set-log").innerHTML = d.flags.filter(f => f.key.startsWith("logging")).map(flag).join("");
+  $("#set-text").innerHTML = d.texts.map(t => `<div class="setting"><label>${esc(t.label)}</label><input class="input" data-k="${t.key}" value="${esc(t.value)}"></div>`).join("");
+  $("#backup-sel").innerHTML = d.backups.length ? d.backups.map(b => `<option>${esc(b)}</option>`).join("") : "<option disabled>No backups yet</option>";
+  $("#restore-btn").disabled = !d.backups.length;
+  $$("#page-settings [data-k]").forEach(inp => inp.oninput = inp.onchange = () => {
+    S.dirty[inp.dataset.k] = inp.type === "checkbox" ? inp.checked : inp.value;
+    $("#savebar").classList.add("show");
+  });
+  $("#savebar").classList.remove("show");
+}
+$("#save-btn").onclick = async () => { await api.save_settings(S.dirty); toast("Settings saved, backup kept", "ok"); loadSettings(); };
+$("#discard-btn").onclick = loadSettings;
+$("#restore-btn").onclick = async () => {
+  const b = $("#backup-sel").value;
+  if (await confirmBox("Restore backup?", `Replace your settings with <b>${esc(b)}</b>? Your current settings are backed up first.`, "Restore")) {
+    await api.restore_backup(b); toast("Settings restored", "ok"); loadSettings();
+  }
+};
+
+// ---------------------------------------------------------- logs
+async function loadLogs() {
+  const files = await api.logs();
+  const el = $("#log-files");
+  if (!files.length) { el.innerHTML = `<div class="empty">${icon("file")}<div>No logs yet.</div></div>`; $("#log-view").textContent = "Logs appear in kronos\\Logs after you play a match."; return; }
+  if (!S.log || !files.some(f => f.path === S.log)) S.log = files[0].path;
+  el.innerHTML = files.map(f => `<div class="log-file ${f.path === S.log ? "sel" : ""}" data-p="${esc(f.path)}">${icon("file")} ${esc(f.name)}</div>`).join("");
+  $$(".log-file", el).forEach(f => f.onclick = () => { S.log = f.dataset.p; loadLogs(); });
+  showLog();
+}
+async function showLog() {
+  const lines = await api.read_log(S.log);
+  const q = $("#log-search").value.toLowerCase();
+  const shown = lines.filter(l => (S.logFilter === "all" || l.hit) && (!q || l.text.toLowerCase().includes(q)));
+  $("#log-view").innerHTML = shown.length ? shown.map(l => l.hit ? `<span class="hit">${esc(l.text)}</span>` : esc(l.text) + "\n").join("") : "<span class='muted'>Nothing to show.</span>";
+}
+$("#log-search").oninput = showLog;
+$("#log-refresh").onclick = loadLogs;
+$$("#log-filter button").forEach(b => b.onclick = () => { S.logFilter = b.dataset.f; $$("#log-filter button").forEach(x => x.classList.toggle("on", x === b)); showLog(); });
+
+// ---------------------------------------------------------- health
+async function loadHealth() {
+  $("#health").innerHTML = `<div class="row"><span class="spin"></span>Running checks…</div>`;
+  const res = await api.health();
+  const bad = res.filter(r => r.ok === false).length;
+  $("#nav-health").textContent = bad ? `${bad} ✖` : "✔";
+  $("#nav-health").style.color = bad ? "var(--bad)" : "var(--ok)";
+  $("#health").innerHTML = res.map(r => `<div class="check"><div class="badge ${r.ok === true ? "ok" : r.ok === false ? "bad" : "unk"}">${icon(r.ok === true ? "check" : r.ok === false ? "x" : "q")}</div>
+    <div><b>${esc(r.title)}</b><span>${esc(r.detail)}</span></div></div>`).join("");
+}
+$("#health-run").onclick = loadHealth;
+$("#handled-btn").onclick = async () => { await api.mark_update_handled(); toast("Update marked as handled", "ok"); loadHealth(); refresh(); };
+
+// ---------------------------------------------------------- play + theme + sessions
+$("#play-btn").onclick = async () => {
+  modal(`<h2>Getting ready…</h2><div class="body row"><span class="spin"></span>Checking your setup and mods</div>`);
+  const problems = await api.prelaunch();
+  const launch = async () => { const err = await api.launch(); closeModal(); err ? toast(err, "bad") : toast("Opening the Kronos launcher", "ok"); };
+  if (!problems.length) return launch();
+  modal(`<h2>Before you play</h2><div class="body">Found ${problems.length} thing${problems.length > 1 ? "s" : ""} to check:<ul>${problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Play anyway</button></div>`);
+  $("#play-anyway").onclick = launch;
+};
+$("#theme-btn").onclick = async () => { await api.set_theme(!S.ov.dark); refresh(); };
+
+async function pollSession() {
+  const r = await api.poll_session();
+  $("#live-dot").classList.toggle("live", r === "playing");
+  $("#live-text").textContent = r === "playing" ? "Playing now" : "Not playing";
+  if (r === "ended") { toast("Session saved to Play history", "ok"); loadSessions(); }
+  if (r === "ended-test") { toast("Test finished — your mods are back", "ok"); refresh(); if ($("#page-studio.active")) loadStudio(); }
+}
+
+// ---------------------------------------------------------- studio (dev mode)
+$("#dev-toggle").onchange = async e => {
+  await api.set_dev_mode(e.target.checked);
+  toast(e.target.checked ? "Developer mode on — Studio is in the sidebar" : "Developer mode off", "ok");
+  refresh();
+};
+
+async function loadStudio() {
+  const list = await api.studio();
+  if (!S.proj || !list.some(p => p.name === S.proj)) S.proj = list[0]?.name;
+  $("#proj-list").innerHTML = list.map(p => `<div class="proj ${p.name === S.proj ? "sel" : ""}" data-n="${esc(p.name)}">
+    <b>${esc(p.title)}</b><small><span>${esc(p.version ? "v" + p.version : "no manifest")}</span>
+    ${p.errors ? `<span class="e">${p.errors} error${p.errors > 1 ? "s" : ""}</span>` : ""}
+    ${p.warnings ? `<span class="w">${p.warnings} warning${p.warnings > 1 ? "s" : ""}</span>` : ""}
+    ${!p.errors && !p.warnings ? '<span class="k">clean</span>' : ""}</small></div>`).join("")
+    || `<div class="empty" style="padding:24px">No projects yet.</div>`;
+  $$("#proj-list .proj").forEach(el => el.onclick = async () => {
+    if (el.dataset.n !== S.proj && !(await leaveEditor())) return;
+    S.proj = el.dataset.n; S.projTab = "code"; loadStudio();
+  });
+  api.completions().then(w => S.words = w);
+  if (S.proj) loadProject(S.proj);
+  else $("#proj-main").innerHTML = `<div class="empty">${icon("code")}<div>Create a project to get started.</div></div>`;
+}
+
+function problemRows(issues, compile) {
+  const rows = [];
+  if (compile && compile.ok === false) rows.push({ line: compile.line || 0, severity: "error", message: "Compiler: " + (compile.text || compile.msg) });
+  rows.push(...issues);
+  const head = compile ? (compile.ok === true ? `<div class="prob"><span class="sev ok">OK</span><span>Compiles with Kronos's compiler.</span></div>`
+    : compile.ok === null ? `<div class="prob"><span class="sev info">Info</span><span>${esc(compile.msg)}</span></div>` : "") : "";
+  if (!rows.length) return head + `<div class="prob"><span class="sev ok">Clean</span><span>No lint problems found.</span></div>`;
+  return head + rows.map(i => `<div class="prob" data-line="${i.line}"><span class="sev ${i.severity}">${i.severity}</span>
+    <span class="where">${i.line ? "Line " + i.line : "Mod"}</span><span>${esc(i.message)}</span></div>`).join("");
+}
+
+function bindProblems(el) {
+  $$(".prob[data-line]", el).forEach(p => p.onclick = () => gotoLine(+p.dataset.line));
+}
+
+async function loadProject(name) {
+  const p = await api.project(name);
+  if (S.proj !== name) return;
+  S.project = p;
+  const m = p.manifest, tab = S.projTab || "code";
+  const modeLabel = { zm: "Zombies", mp: "Multiplayer", any: "Any mode" };
+  $("#proj-main").innerHTML = `
+    <div class="proj-head">
+      <div style="flex:1;min-width:220px"><h2>${esc(m.title || name)}</h2>
+        <div class="meta"><span class="pill">${esc(name)}.gsc</span>${p.hasManifest && m.version ? `<span class="pill">v${esc(m.version)}</span>` : ""}
+        ${p.hasManifest ? `<span class="pill">${modeLabel[m.mode]}</span>` : ""}${p.hasManifest && m.author ? `<span class="pill">by ${esc(m.author)}</span>` : ""}
+        <span class="pill" style="color:${p.enabled ? "var(--ok)" : "var(--text-3)"}">${p.enabled ? "On" : "Off"}</span>
+        ${p.hasManifest ? "" : `<span class="pill" style="color:var(--warn)">No manifest</span>`}</div></div>
+      <div class="row">
+        <button class="btn" id="pj-edit">${icon("edit")}${p.vscode ? "VS Code" : "Notepad"}</button>
+        <button class="btn" id="pj-check">${icon("refresh")}Check</button>
+        <button class="btn primary" id="pj-test">${icon("play")}Test alone</button>
+      </div>
+    </div>
+    <div class="seg" id="pj-tabs" style="margin-bottom:14px"><button data-t="code" class="${tab === "code" ? "on" : ""}">Code &amp; problems</button>
+      <button data-t="manifest" class="${tab === "manifest" ? "on" : ""}">Manifest</button></div>
+    <div id="pj-body"></div>`;
+  $("#pj-edit").onclick = async () => {
+    if (S.ed && S.ed.name === name && edDirty() && !(await saveEditor())) return;
+    toast(`Opening in ${await api.open_in_editor(name)} — changes you save there show up here`, "info");
+  };
+  $("#pj-check").onclick = () => checkProject(name);
+  $("#pj-test").onclick = () => testAlone(name);
+  $$("#pj-tabs button").forEach(b => b.onclick = () => { S.projTab = b.dataset.t; loadProject(name); });
+  tab === "code" ? mountEditor(p) : renderManifestTab(p);
+}
+
+async function checkProject(name) {
+  S.projTab = "code";
+  if (!$("#ed-ta")) await loadProject(name);
+  if (S.ed && S.ed.name === name && edDirty() && !(await saveEditor())) return;
+  $("#pj-probs").innerHTML = `<div class="prob"><span class="spin"></span><span>Linting and compiling…</span></div>`;
+  const r = await api.check_project(name);
+  if (!S.ed || S.ed.name !== name || !$("#ed-ta")) return;
+  S.ed.compile = r.compile;
+  S.ed.compiledText = S.ed.saved;
+  S.ed.lint = r.issues.filter(i => i.line);
+  S.ed.man = r.issues.filter(i => !i.line);
+  renderEditor(); renderProblems(); loadStudioList();
+}
+
+async function loadStudioList() {
+  const list = await api.studio();
+  for (const p of list) {
+    const el = $(`#proj-list .proj[data-n="${CSS.escape(p.name)}"] small`);
+    if (el) el.innerHTML = `<span>${esc(p.version ? "v" + p.version : "no manifest")}</span>${p.errors ? `<span class="e">${p.errors} error${p.errors > 1 ? "s" : ""}</span>` : ""}${p.warnings ? `<span class="w">${p.warnings} warning${p.warnings > 1 ? "s" : ""}</span>` : ""}${!p.errors && !p.warnings ? '<span class="k">clean</span>' : ""}`;
+  }
+}
+
+function renderManifestTab(p) {
+  const m = p.manifest;
+  $("#pj-body").innerHTML = `<div class="form">
+    <div class="two"><div class="field"><label>Title</label><input class="input" id="mf-title" value="${esc(m.title || "")}"></div>
+      <div class="field"><label>Version</label><input class="input" id="mf-version" value="${esc(m.version || "")}" placeholder="1.0.0"></div></div>
+    <div class="two"><div class="field"><label>Author</label><input class="input" id="mf-author" value="${esc(m.author || "")}"></div>
+      <div class="field"><label>Game mode</label><div class="seg" id="mf-mode">${["zm", "mp", "any"].map(k =>
+        `<button data-m="${k}" class="${m.mode === k ? "on" : ""}">${{ zm: "Zombies", mp: "Multiplayer", any: "Any" }[k]}</button>`).join("")}</div></div></div>
+    <div class="field"><label>Description</label><textarea class="input" id="mf-desc" placeholder="What does this mod do?">${esc(m.description || "")}</textarea></div>
+    <div class="field"><label>Requires — these get turned on too when you test this mod</label>
+      <div class="req-chips">${p.others.length ? p.others.map(o => `<label><input type="checkbox" value="${esc(o)}" ${m.requires.includes(o) ? "checked" : ""}>${esc(o)}</label>`).join("")
+        : '<span class="muted">No other mods installed.</span>'}</div></div>
+    <div class="row"><button class="btn primary" id="mf-save">${icon("check")}${p.hasManifest ? "Save manifest" : "Create manifest"}</button>
+      <span class="muted" style="font-size:12.5px">Saved as ${esc(p.name)}.mod.json next to the mod, and included when you export a pack.</span></div></div>`;
+  $$("#mf-mode button").forEach(b => b.onclick = () => $$("#mf-mode button").forEach(x => x.classList.toggle("on", x === b)));
+  $("#mf-save").onclick = async () => {
+    const data = {
+      title: $("#mf-title").value, version: $("#mf-version").value, author: $("#mf-author").value,
+      description: $("#mf-desc").value, mode: $("#mf-mode .on").dataset.m,
+      requires: $$(".req-chips input:checked").map(i => i.value),
+    };
+    const r = await api.save_manifest(p.name, data);
+    if (r.error) return toast(r.error, "bad");
+    toast("Manifest saved", "ok");
+    refresh(); loadStudio();
+  };
+}
+
+async function testAlone(name) {
+  if (S.ed && S.ed.name === name && edDirty() && !(await saveEditor())) return;
+  modal(`<h2>Getting ${esc(name)} ready…</h2><div class="body row"><span class="spin"></span>Linting and compiling</div>`);
+  const r = await api.check_project(name);
+  const errors = r.issues.filter(i => i.severity === "error").map(i => (i.line ? `Line ${i.line}: ` : "") + i.message);
+  if (r.compile.ok === false) errors.unshift("Compiler: " + (r.compile.line ? `line ${r.compile.line}: ` : "") + (r.compile.text || r.compile.msg));
+  const go = async () => {
+    const err = await api.test_alone(name);
+    if (err) { closeModal(); return toast(err, "bad"); }
+    const lerr = await api.launch();
+    closeModal();
+    lerr ? toast(lerr, "bad") : toast(`Testing ${name} alone — Kronos is opening`, "ok");
+    refresh(); loadStudio();
+  };
+  if (!errors.length) return go();
+  modal(`<h2>${errors.length} problem${errors.length > 1 ? "s" : ""} first</h2><div class="body"><ul>${errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>
+    It will probably fail or freeze in game.</div><div class="actions"><button class="btn ghost" id="ta-fix">Fix first</button>
+    <button class="btn" id="ta-go">${icon("play")}Test anyway</button></div>`);
+  $("#ta-fix").onclick = () => { closeModal(); S.proj = name; S.projTab = "code"; go_studio_check(name); };
+  $("#ta-go").onclick = go;
+}
+function go_studio_check(name) { if (!$("#page-studio.active")) go("studio"); checkProject(name); }
+
+// ---------------------------------------------------------- built-in editor
+// A transparent textarea (real typing, selection, undo) over a highlighted copy of the same text.
+const LH = 20, PAD_X = 14, PAD_Y = 10;
+let charW = 0, lintTimer = null;
+const AC = { items: [], i: 0, prefix: "", quiet: false };
+const edDirty = () => !!S.ed && S.ed.text !== S.ed.saved;
+const insert = text => document.execCommand("insertText", false, text);  // keeps Ctrl+Z working
+const lineStart = (v, pos) => v.lastIndexOf("\n", pos - 1) + 1;
+
+function mountEditor(p) {
+  if (!S.ed || S.ed.name !== p.name) {
+    S.ed = { name: p.name, saved: p.source, text: p.source, mtime: p.mtime, compile: null, compiledText: null,
+             lint: p.issues.filter(i => i.line), man: p.issues.filter(i => !i.line) };
+  } else {
+    S.ed.man = p.issues.filter(i => !i.line);
+    if (!edDirty()) Object.assign(S.ed, { saved: p.source, text: p.source, mtime: p.mtime });
+  }
+  $("#pj-body").innerHTML = `<div class="probs" id="pj-probs"></div>
+    <div class="ed-bar"><span id="ed-status"></span><span style="flex:1"></span>
+      <span class="muted" style="font-size:12px">Ctrl+S save · Tab indent · Ctrl+/ comment · Ctrl+Space suggest</span>
+      <button class="btn sm ghost" id="ed-revert">Revert</button><button class="btn sm" id="ed-save">${icon("check")}Save</button></div>
+    <div class="editor"><div class="ed-gutter" id="ed-gut"></div><div class="ed-main">
+      <div class="ed-hl" id="ed-hl"></div>
+      <textarea class="ed-ta" id="ed-ta" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea>
+      <div class="ac" id="ac"></div></div></div>`;
+  const ta = $("#ed-ta");
+  ta.value = S.ed.text;
+  if (!charW) {
+    const sp = document.createElement("span");
+    sp.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
+    sp.textContent = "M".repeat(200);
+    $("#ed-hl").appendChild(sp);
+    charW = sp.getBoundingClientRect().width / 200;
+    sp.remove();
+  }
+  ta.oninput = () => {
+    S.ed.text = ta.value;
+    renderEditor(); scheduleLint();
+    if (AC.quiet) AC.quiet = false; else updateAc();
+  };
+  ta.onscroll = syncScroll;
+  ta.onkeydown = edKey;
+  ta.onclick = closeAc;
+  ta.onblur = () => setTimeout(closeAc, 150);
+  $("#ed-save").onclick = saveEditor;
+  $("#ed-revert").onclick = () => { ta.focus(); ta.select(); insert(S.ed.saved); };
+  renderEditor(); renderProblems();
+  if (S.ed.text !== p.source) scheduleLint();
+}
+
+function edSeverity() {
+  const sev = {}, issues = [...S.ed.lint];
+  if (S.ed.compile && S.ed.compile.ok === false && S.ed.compile.line && S.ed.compiledText === S.ed.text)
+    issues.push({ line: S.ed.compile.line, severity: "error" });
+  for (const i of issues) if (i.line && i.severity !== "info" && sev[i.line] !== "error") sev[i.line] = i.severity;
+  return sev;
+}
+
+function renderEditor() {
+  const ta = $("#ed-ta");
+  if (!ta) return;
+  const sev = edSeverity(), lines = highlight(ta.value).split("\n");
+  $("#ed-hl").innerHTML = `<div class="ed-in">${lines.map((l, i) => `<div class="l ${sev[i + 1] || ""}">${l || " "}</div>`).join("")}</div>`;
+  $("#ed-gut").innerHTML = lines.map((_, i) => `<div class="${sev[i + 1] || ""}">${i + 1}</div>`).join("") + `<div style="height:80px"></div>`;
+  syncScroll();
+  $("#ed-status").innerHTML = edDirty() ? `<span style="color:var(--ember)">● Unsaved changes</span>` : `<span class="muted">Saved</span>`;
+}
+
+function renderProblems() {
+  const fresh = S.ed.compile && S.ed.compiledText === S.ed.text ? S.ed.compile : null;
+  $("#pj-probs").innerHTML = problemRows([...S.ed.lint, ...S.ed.man], fresh) + (S.ed.compile && !fresh
+    ? `<div class="prob"><span class="sev info">Info</span><span>Edited since the last compile. Press Check to compile again.</span></div>` : "");
+  bindProblems($("#pj-probs"));
+}
+
+function syncScroll() {
+  const ta = $("#ed-ta");
+  if (!ta) return;
+  $("#ed-hl").scrollTop = $("#ed-gut").scrollTop = ta.scrollTop;
+  $("#ed-hl").scrollLeft = ta.scrollLeft;
+  positionAc();
+}
+
+function scheduleLint() {
+  clearTimeout(lintTimer);
+  lintTimer = setTimeout(async () => {
+    const { name, text } = S.ed;
+    const res = await api.lint_text(text);
+    if (!S.ed || S.ed.name !== name || S.ed.text !== text || !$("#ed-ta")) return;
+    S.ed.lint = res;
+    renderEditor(); renderProblems();
+  }, 300);
+}
+
+async function saveEditor() {
+  if (!S.ed) return false;
+  const text = S.ed.text;
+  const r = await api.save_source(S.ed.name, text);
+  if (r.error) { toast(r.error, "bad"); return false; }
+  S.ed.saved = text; S.ed.mtime = r.mtime;
+  if ($("#ed-ta")) { renderEditor(); renderProblems(); }
+  toast("Saved — the previous version is backed up", "ok");
+  loadStudioList();
+  return true;
+}
+
+function leaveEditor() {
+  if (!edDirty()) return Promise.resolve(true);
+  return new Promise(res => {
+    modal(`<h2>Save changes to ${esc(S.ed.name)}?</h2><div class="body">You have edits that aren't saved yet.</div><div class="actions">
+      <button class="btn ghost" id="lv-cancel">Cancel</button><button class="btn" id="lv-discard">Discard</button>
+      <button class="btn primary" id="lv-save">Save</button></div>`);
+    $("#lv-cancel").onclick = () => { closeModal(); res(false); };
+    $("#lv-discard").onclick = () => { closeModal(); S.ed.text = S.ed.saved; res(true); };
+    $("#lv-save").onclick = async () => { closeModal(); res(await saveEditor()); };
+  });
+}
+
+function gotoLine(n) {
+  const ta = $("#ed-ta");
+  if (!ta || !n) return;
+  const lines = ta.value.split("\n");
+  let pos = 0;
+  for (let i = 0; i < n - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  ta.focus();
+  ta.setSelectionRange(pos, pos + (lines[n - 1] || "").length);
+  ta.scrollTop = Math.max(0, (n - 1) * LH - ta.clientHeight / 2);
+  syncScroll();
+  const l = $$("#ed-hl .l")[n - 1];
+  if (l) { l.classList.add("flash"); setTimeout(() => l.classList.remove("flash"), 1400); }
+}
+
+// Replace the whole lines touched by the selection, then reselect them.
+function mapLines(fn) {
+  const ta = $("#ed-ta"), v = ta.value, s = lineStart(v, ta.selectionStart);
+  let e = ta.selectionEnd;
+  if (e > s && v[e - 1] === "\n") e--;
+  const nl = v.indexOf("\n", e), end = nl < 0 ? v.length : nl;
+  const out = fn(v.slice(s, end).split("\n")).join("\n");
+  ta.setSelectionRange(s, end);
+  insert(out);
+  ta.setSelectionRange(s, s + out.length);
+}
+
+function edKey(e) {
+  const ta = e.target, v = ta.value, s = ta.selectionStart, en = ta.selectionEnd, mod = e.ctrlKey || e.metaKey;
+  if (acOpen()) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); return moveAc(e.key === "ArrowDown" ? 1 : -1); }
+    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); return acceptAc(); }
+    if (e.key === "Escape") { e.preventDefault(); return closeAc(); }
+  }
+  if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); return saveEditor(); }
+  if (mod && e.key === " ") { e.preventDefault(); return updateAc(true); }
+  if (mod && e.key === "/") {
+    e.preventDefault();
+    return mapLines(ls => {
+      const commented = ls.filter(l => l.trim()).every(l => /^\s*\/\//.test(l));
+      return ls.map(l => commented ? l.replace(/^(\s*)\/\/ ?/, "$1") : l.trim() ? l.replace(/^(\s*)/, "$1// ") : l);
+    });
+  }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    if (e.shiftKey || v.slice(s, en).includes("\n")) return mapLines(ls => ls.map(l => e.shiftKey ? l.replace(/^ {1,4}/, "") : "    " + l));
+    return insert("    ");
+  }
+  if (e.key === "Enter" && !mod) {
+    e.preventDefault();
+    const before = v.slice(lineStart(v, s), s);
+    let indent = before.match(/^\s*/)[0];
+    if (/\{\s*$/.test(before)) indent += "    ";
+    return insert("\n" + indent);
+  }
+  if (e.key === "}" && s === en) {
+    const ls = lineStart(v, s), before = v.slice(ls, s);
+    if (/^ {4,}$/.test(before)) { e.preventDefault(); ta.setSelectionRange(ls, s); insert(before.slice(4) + "}"); }
+  }
+}
+
+// ---- autocomplete: keywords + every word used in your installed mods
+const acOpen = () => !!$("#ac") && $("#ac").classList.contains("show");
+function closeAc() { const a = $("#ac"); if (a) a.classList.remove("show"); }
+
+function updateAc(force) {
+  const ta = $("#ed-ta");
+  if (!ta || ta.selectionStart !== ta.selectionEnd || !S.words) return closeAc();
+  const m = ta.value.slice(0, ta.selectionStart).match(/(#"[a-z0-9_]*|[A-Za-z_][\w:]*)$/);
+  const pre = m ? m[0] : "", q = pre.toLowerCase();
+  if (!force && pre.length < 2) return closeAc();
+  const items = S.words.filter(x => x.w !== pre && x.w.toLowerCase().startsWith(q)).slice(0, 8);
+  if (q.length >= 3) for (const x of S.words) {
+    if (items.length >= 8) break;
+    if (x.w !== pre && !items.includes(x) && x.w.toLowerCase().includes(q)) items.push(x);
+  }
+  if (!items.length) return closeAc();
+  Object.assign(AC, { items, i: 0, prefix: pre });
+  const a = $("#ac");
+  a.innerHTML = items.map((x, k) => `<div class="${k ? "" : "on"}" data-k="${k}"><b>${esc(x.w)}</b>
+    <small>${x.from === "keyword" ? "keyword" : "used in " + esc(x.from)}</small></div>`).join("");
+  $$("div", a).forEach(d => d.onmousedown = ev => { ev.preventDefault(); AC.i = +d.dataset.k; acceptAc(); });
+  a.classList.add("show");
+  positionAc();
+}
+
+function positionAc() {
+  if (!acOpen()) return;
+  const ta = $("#ed-ta"), rows = ta.value.slice(0, ta.selectionStart).split("\n");
+  const row = rows.length - 1, col = rows[row].length - AC.prefix.length;
+  const a = $("#ac"), box = $(".ed-main");
+  let top = PAD_Y + (row + 1) * LH - ta.scrollTop + 2;
+  if (top + a.offsetHeight > box.clientHeight - 4) top = PAD_Y + row * LH - ta.scrollTop - a.offsetHeight - 2;  // no room below
+  a.style.top = Math.max(4, top) + "px";
+  a.style.left = Math.max(4, Math.min(PAD_X + col * charW - ta.scrollLeft, box.clientWidth - a.offsetWidth - 4)) + "px";
+}
+
+function moveAc(d) {
+  AC.i = (AC.i + d + AC.items.length) % AC.items.length;
+  $$("#ac div").forEach((x, k) => x.classList.toggle("on", k === AC.i));
+  $$("#ac div")[AC.i].scrollIntoView({ block: "nearest" });
+}
+
+function acceptAc() {
+  const ta = $("#ed-ta"), s = ta.selectionStart;
+  ta.setSelectionRange(s - AC.prefix.length, s);
+  AC.quiet = true;
+  insert(AC.items[AC.i].w);
+  closeAc();
+}
+
+// Pick up edits saved in VS Code / Notepad when you come back to the window.
+window.addEventListener("focus", async () => {
+  if (!S.ed || !$("#ed-ta") || !$("#page-studio.active")) return;
+  const name = S.ed.name, mt = await api.mod_mtime(name);
+  if (!S.ed || S.ed.name !== name || !mt || !S.ed.mtime || mt <= S.ed.mtime + 0.001) return;
+  S.ed.mtime = mt;
+  if (edDirty()) return toast("This file also changed outside Kronos Plus. Saving here will overwrite those changes.", "bad");
+  const src = await api.source(name);
+  Object.assign(S.ed, { saved: src, text: src });
+  $("#ed-ta").value = src;
+  renderEditor(); scheduleLint();
+  toast("Reloaded — the file was changed outside Kronos Plus", "info");
+});
+
+// ---------------------------------------------------------- live console
+const CON = { rows: [], cursor: null, paused: false, timer: null, filter: "all", shown: false };
+
+async function pollConsole() {
+  if (CON.paused || CON.busy) return;
+  CON.busy = true;
+  try {
+    const r = await api.console_poll(CON.cursor);
+    CON.cursor = r.cursor;
+    $("#con-files").textContent = r.files.length ? "Watching " + r.files.join(", ") : "No Kronos log files yet.";
+    if (r.rows.length || !CON.shown) {
+      CON.rows.push(...r.rows);
+      if (CON.rows.length > 3000) CON.rows = CON.rows.slice(-3000);
+      renderConsole();
+    }
+  } finally { CON.busy = false; }
+}
+
+function renderConsole() {
+  CON.shown = true;
+  const el = $("#console"), stick = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const q = $("#con-search").value.toLowerCase();
+  const rows = CON.rows.filter(r => (CON.filter === "all" || r.kind === CON.filter) && (!q || r.text.toLowerCase().includes(q)));
+  el.innerHTML = rows.length ? rows.map(r => {
+    const mod = (r.text.match(/custom_scripts[\\/](\w+)\.gsc/) || [])[1];
+    return `<div class="crow ${r.kind} ${mod ? "link" : ""}" ${mod ? `data-mod="${esc(mod)}" title="Open ${esc(mod)} in Studio"` : ""}>
+      <span class="src">${esc(r.src)}</span><span class="tx">${r.kind === "match" ? '<span class="sev ok">match</span> ' : ""}${esc(r.text)}</span></div>`;
+  }).join("") : `<div class="empty">${icon("file")}<div>${CON.rows.length ? "No lines match." :
+    "Nothing yet. New lines appear here live while you play."}</div>
+    <div style="font-size:12.5px;margin-top:8px;max-width:520px;margin-inline:auto">Kronos hasn't written any script print() output to a file on this PC so far,
+    so this mostly shows the launcher log, crash reports and your match results.</div></div>`;
+  $$(".crow.link", el).forEach(c => c.onclick = () => { S.proj = c.dataset.mod; S.projTab = "code"; go("studio"); });
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+
+$("#con-search").oninput = renderConsole;
+$$("#con-filter button").forEach(b => b.onclick = () => {
+  CON.filter = b.dataset.f; $$("#con-filter button").forEach(x => x.classList.toggle("on", x === b)); renderConsole();
+});
+$("#con-pause").onclick = () => {
+  CON.paused = !CON.paused;
+  $("#con-pause").textContent = CON.paused ? "Resume" : "Pause";
+  $("#con-state").textContent = CON.paused ? "Paused" : "Live";
+  $("#con-dot").classList.toggle("live", !CON.paused);
+  if (!CON.paused) pollConsole();
+};
+$("#con-clear").onclick = () => { CON.rows = []; renderConsole(); };
+
+$("#np-btn").onclick = async () => {
+  const d = await api.project_defaults();
+  const tpls = Object.keys(S.ov.templates);
+  modal(`<h2>New project</h2><div class="body">Creates the .gsc and its manifest, then checks it compiles.</div>
+    <div class="field"><label>File name (lowercase, used in code)</label><input class="input" id="np-name" placeholder="zm_my_mod"></div>
+    <div class="field"><label>Title</label><input class="input" id="np-title" placeholder="My Mod"></div>
+    <div class="field"><label>Author</label><input class="input" id="np-author" value="${esc(d.author || "")}"></div>
+    <div class="field"><label>Start from</label><select class="input" id="np-tpl"><option value="">Blank — runs once for each player</option>
+      ${tpls.map(t => `<option>${esc(t)}</option>`).join("")}</select></div>
+    <div class="field" id="np-numf" style="display:none"><label id="np-numl"></label><input class="input" id="np-num" type="number" min="0" step="100"></div>
+    <div id="np-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="np-go">Create</button></div>`);
+  const sync = () => {
+    const t = S.ov.templates[$("#np-tpl").value];
+    $("#np-numf").style.display = t ? "" : "none";
+    if (t) { $("#np-numl").textContent = t.label; $("#np-num").value = t.default; }
+  };
+  $("#np-tpl").onchange = sync;
+  $("#np-go").onclick = async () => {
+    const name = $("#np-name").value.trim();
+    $("#np-go").disabled = true;
+    const mode = name.startsWith("zm_") ? "zm" : name.startsWith("mp_") ? "mp" : "any";
+    const r = await api.create_project(name, { title: $("#np-title").value || name, version: "1.0.0", author: $("#np-author").value,
+      description: $("#np-title").value || "", mode, requires: [] }, $("#np-tpl").value, $("#np-num").value || 0);
+    if (!r.ok) { $("#np-err").textContent = r.error; $("#np-go").disabled = false; return; }
+    closeModal(); S.proj = name; S.projTab = "code";
+    toast(r.compiles ? "Project created — it compiles" : `Created, but: ${r.msg}`, r.compiles ? "ok" : "bad");
+    refresh(); loadStudio();
+  };
+};
+
+window.addEventListener("pywebviewready", async () => {
+  api = window.pywebview.api;
+  await refresh();
+  loadHealth();
+  pollSession();
+  setInterval(pollSession, 10000);
+});
+</script>
+</body>
+</html>
