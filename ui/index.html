@@ -98,6 +98,7 @@ header .spacer { flex: 1; }
 .banner { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 11px; font-size: 13px; }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
 .banner.info { background: var(--info-soft); color: var(--info); }
+.banner.update { background: var(--ember-soft); color: var(--ember-2); }
 .content { flex: 1; overflow: auto; padding: 14px 28px 28px; min-height: 0; }
 .page { display: none; animation: fade .2s ease; }
 .page.active { display: block; }
@@ -350,6 +351,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .modal h2 { margin: 0 0 6px; font: 600 18px/1.3 "Segoe UI Variable Display", "Segoe UI", sans-serif; }
 .modal .body { color: var(--text-2); margin: 8px 0 18px; }
 .modal .body ul { padding-left: 18px; margin: 8px 0; }
+.modal .steps { padding-left: 20px; margin: 12px 0 0; display: grid; gap: 10px; }
+.modal .steps li::marker { color: var(--text-3, var(--text-2)); font-weight: 600; }
 .modal .field { display: grid; gap: 6px; margin-bottom: 12px; }
 .modal .field label { font-size: 12.5px; color: var(--text-3); }
 .modal .actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -386,7 +389,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-link"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
@@ -425,6 +429,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   <div class="side-foot">
     <button class="btn sm ghost" id="theme-btn"><svg><use href="#i-sun"/></svg><span>Light mode</span></button>
     <div class="path" id="game-dir"></div>
+    <button class="btn sm ghost" id="update-side" disabled><svg><use href="#i-refresh"/></svg><span>Checking for updates…</span></button>
+    <div class="path" id="app-ver"></div>
   </div>
 </aside>
 
@@ -459,7 +465,7 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
             <button data-act="folder"><svg><use href="#i-folder"/></svg>Open scripts folder</button>
           </div>
         </div>
-        <button class="btn primary" id="new-btn"><svg><use href="#i-plus"/></svg>New mod</button>
+        <button class="btn primary" id="get-btn"><svg><use href="#i-download"/></svg>Get mods</button>
       </div>
       <div class="presets" id="presets"></div>
       <div class="mods-layout">
@@ -657,10 +663,15 @@ async function refresh() {
   $("#theme-btn").innerHTML = S.ov.dark ? icon("sun") + "<span>Light mode</span>" : icon("moon") + "<span>Dark mode</span>";
   $("#game-dir").textContent = S.ov.gameDir;
   $("#nav-mods").textContent = `${S.ov.enabledCount}/${S.ov.mods.length}`;
-  $("#banners").innerHTML = S.ov.banners.map(b => `<div class="banner ${b.kind}">${icon(b.kind === "warn" ? "alert" : "bolt")}<span>${esc(b.text)}</span>
+  $("#app-ver").textContent = "Version " + S.ov.appVersion;
+  $("#banners").innerHTML = (S.update ? `<div class="banner update">${icon("download")}<span>Kronos Plus <b>${esc(S.update.version)}</b> is out.</span>
+    <span style="flex:1"></span><button class="btn sm primary" data-act="update">Update now</button></div>` : "") +
+    S.ov.banners.map(b => `<div class="banner ${b.kind}">${icon(b.kind === "warn" ? "alert" : "bolt")}<span>${esc(b.text)}</span>
     ${b.action === "stop-test" ? `<button class="btn sm" data-act="stop-test">${icon("undo")}Restore my mods now</button>` : ""}</div>`).join("");
   const st = $('#banners [data-act="stop-test"]');
   if (st) st.onclick = async () => { await api.stop_test(); toast("Your mods are back", "ok"); refresh(); if ($("#page-studio.active")) loadStudio(); };
+  const up = $('#banners [data-act="update"]');
+  if (up) up.onclick = updateNow;
   $("#nav-studio").style.display = $("#nav-console").style.display = S.ov.devMode ? "" : "none";
   $("#dev-toggle").checked = S.ov.devMode;
   if (!S.ov.devMode && ($("#page-studio.active") || $("#page-console.active"))) go("mods");
@@ -766,26 +777,8 @@ $("#compile-btn").onclick = async () => {
     <div class="actions"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
 };
 
-// new mod from template
-$("#new-btn").onclick = () => {
-  const names = Object.keys(S.ov.templates);
-  modal(`<h2>New mod</h2><div class="body">Pick a template, give it a name, and it's ready for your next game.</div>
-    <div class="field"><label>Template</label><select class="input" id="t-tpl">${names.map(n => `<option>${esc(n)}</option>`).join("")}</select></div>
-    <div class="field"><label>Mod name</label><input class="input" id="t-name" value="zm_my_mod"></div>
-    <div class="field"><label id="t-label"></label><input class="input" id="t-num" type="number" min="0" step="100"></div>
-    <div id="t-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
-    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="t-go">Create</button></div>`);
-  const sync = () => { const t = S.ov.templates[$("#t-tpl").value]; $("#t-label").textContent = t.label; $("#t-num").value = t.default; };
-  $("#t-tpl").onchange = sync; sync();
-  $("#t-go").onclick = async () => {
-    $("#t-go").disabled = true;
-    const r = await api.create_from_template($("#t-tpl").value, $("#t-name").value, $("#t-num").value);
-    if (!r.ok) { $("#t-err").textContent = r.error; $("#t-go").disabled = false; return; }
-    closeModal(); S.selected = $("#t-name")?.value || S.selected;
-    toast(r.compiles ? "Mod created — it compiles" : `Created, but: ${r.msg}`, r.compiles ? "ok" : "bad");
-    refresh();
-  };
-};
+// get mods from the Kronos Discord (making mods from templates lives in Studio)
+$("#get-btn").onclick = () => linkInstall();
 
 // packs menu
 $("#more-btn").onclick = e => { e.stopPropagation(); $("#more-pop").classList.toggle("show"); };
@@ -793,27 +786,63 @@ document.addEventListener("click", () => $("#more-pop").classList.remove("show")
 $$("#more-pop button").forEach(b => b.onclick = () => ({ link: () => linkInstall(), add: () => addMods(), export: exportPack, install: () => installPack(), folder: () => api.open_scripts_folder() })[b.dataset.act]());
 
 const DISCORD_FILE = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
-function linkInstall(url = "") {
-  modal(`<h2>Install from a Discord link</h2><div class="body">In Discord, right-click a mod's <b>.gsc</b> or <b>.zip</b> file and choose <b>Copy Link</b>, then paste it here.
-    It gets the same safety check as any other mod before anything is installed.</div>
-    <div class="field"><label for="ln-url">Discord file link</label><input class="input" id="ln-url" placeholder="https://cdn.discordapp.com/attachments/…" value="${esc(url)}"></div>
+const DISCORD_MESSAGE = /^https:\/\/(\w+\.)?discord(app)?\.com\/channels\//;
+// Pasted links start downloading right away; typed ones wait for the Download button.
+function linkInstall(url = "", start = false) {
+  const copy = "Right-click a mod's post (or its <b>.zip</b>/<b>.gsc</b> file) and choose <b>Copy Link</b>.";
+  modal(`<h2>Get mods from Discord</h2><div class="body">Mods are shared in the <b>#mods</b> forum on the Kronos Discord.
+    <ol class="steps">
+      <li><button class="btn" id="ln-forum"><svg><use href="#i-link"/></svg>Open #mods in Discord</button></li>
+      <li>${copy}</li>
+      <li>Paste the link here. It's safety-checked before anything is installed.</li>
+    </ol></div>
+    <div class="field"><label for="ln-url">Discord link</label><input class="input" id="ln-url" placeholder="Paste the link from Discord" value="${esc(url)}"></div>
+    <div id="ln-pick"></div>
     <div id="ln-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
     <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="ln-go">Download</button></div>`);
   $("#ln-url").focus();
+  $("#ln-forum").onclick = () => { api.open_mods_forum(); $("#ln-url").focus(); };
   $("#ln-url").onkeydown = e => { if (e.key === "Enter") $("#ln-go").click(); };
-  $("#ln-go").onclick = async () => {
-    $("#ln-go").disabled = true; $("#ln-go").textContent = "Downloading…";
-    const r = await api.link_mod($("#ln-url").value);
-    if (r.error) { $("#ln-err").textContent = r.error; $("#ln-go").disabled = false; $("#ln-go").textContent = "Download"; return; }
+  const busy = on => { $("#ln-go").disabled = on; $("#ln-go").textContent = on ? "Downloading…" : "Download"; };
+  const get = async link => {
+    busy(true); $("#ln-err").textContent = "";
+    const r = await api.link_mod(link);
+    if (r.error) { $("#ln-err").textContent = r.error; busy(false); return; }
+    if (r.kind === "post") {
+      // A post link: open the post in Discord and wait for the user to copy one of its files.
+      busy(false);
+      const pick = $("#ln-pick");
+      pick.innerHTML = `<div style="background:var(--ember-soft);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:6px"><b>Opened the post in Discord.</b> Right-click its <b>.zip</b> or <b>.gsc</b> file and choose <b>Copy Link</b>. The download starts here by itself.</div>`;
+      let { seq } = await api.clipboard_link(null);
+      api.open_post(link);
+      const wait = setInterval(async () => {
+        if (!pick.isConnected) return clearInterval(wait);
+        const c = await api.clipboard_link(seq);
+        seq = c.seq;
+        if (c.link && pick.isConnected) { clearInterval(wait); $("#ln-url").value = c.link; pick.innerHTML = ""; get(c.link); }
+      }, 700);
+      return;
+    }
+    if (r.kind === "choose") {
+      // A post with several mod files: let the user pick one.
+      busy(false);
+      $("#ln-pick").innerHTML = `<div style="color:var(--text-2);font-size:13px">“${esc(r.title)}”${r.author ? ` by ${esc(r.author)}` : ""} has ${r.files.length} files. Pick one:</div>
+        <div class="pill-list">${r.files.map((f, i) => `<button class="btn" data-i="${i}">${esc(f.name)}</button>`).join("")}</div>`;
+      $$("#ln-pick button").forEach(b => b.onclick = () => get(r.files[b.dataset.i].url));
+      return;
+    }
     closeModal();
     if (r.kind === "gsc") addMods(r.files, true); else installPack(r, true);
   };
+  $("#ln-go").onclick = () => { $("#ln-pick").innerHTML = ""; get($("#ln-url").value); };
+  if (start) $("#ln-go").click();
 }
-// Pasting a Discord file link anywhere outside a text box starts an install.
+// Pasting a Discord link anywhere starts an install: focus is usually in the search box or
+// on a mod's switch, so only the code editor and open dialogs keep a pasted link as text.
 document.addEventListener("paste", e => {
-  if (e.target.closest("input, textarea, [contenteditable]") || $("#overlay").classList.contains("show")) return;
+  if (e.target.closest("textarea, [contenteditable]") || $("#overlay").classList.contains("show")) return;
   const text = (e.clipboardData?.getData("text") || "").trim();
-  if (DISCORD_FILE.test(text)) linkInstall(text);
+  if (DISCORD_FILE.test(text) || DISCORD_MESSAGE.test(text)) { e.preventDefault(); linkInstall(text, true); }
 });
 
 async function addMods(files, fromLink) {
@@ -1453,9 +1482,39 @@ $("#np-btn").onclick = async () => {
   };
 };
 
+// ---------------------------------------------------------- updates
+// The button under the theme switch always says where things stand; click it to check again.
+async function checkUpdate() {
+  const b = $("#update-side");
+  b.disabled = true; b.className = "btn sm ghost"; b.innerHTML = icon("refresh") + "<span>Checking for updates…</span>";
+  const r = await api.check_update();
+  S.update = r.status === "new" ? r : null;
+  b.disabled = false;
+  if (r.status === "new") {
+    b.className = "btn sm primary"; b.innerHTML = icon("download") + `<span>Update to ${esc(r.version)}</span>`;
+    b.onclick = updateNow;
+  } else {
+    b.innerHTML = r.status === "current" ? icon("check") + "<span>Up to date</span>" : icon("alert") + "<span>Couldn't check for updates</span>";
+    b.title = r.status === "current" ? "Click to check again" : `${r.error} Click to try again.`;
+    b.onclick = checkUpdate;
+  }
+  refresh();
+}
+async function updateNow() {
+  const u = S.update;
+  const notes = u.notes ? `<div style="font-family:var(--mono);white-space:pre-wrap;max-height:220px;overflow:auto;background:var(--bg-2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12.5px">${esc(u.notes)}</div>` : "";
+  if (!await confirmBox(`Update to ${u.version}?`, `${notes}Kronos Plus closes, updates and opens again by itself. Your mods, presets and settings stay as they are.`, "Update now")) return;
+  const btns = [$('#banners [data-act="update"]'), $("#update-side")].filter(Boolean);
+  const labels = btns.map(b => b.innerHTML);
+  btns.forEach(b => { b.disabled = true; b.textContent = "Downloading…"; });
+  const err = await api.install_update();
+  if (err) { toast(err, "bad"); btns.forEach((b, i) => { b.disabled = false; b.innerHTML = labels[i]; }); }
+}
+
 window.addEventListener("pywebviewready", async () => {
   api = window.pywebview.api;
   await refresh();
+  checkUpdate();
   loadHealth();
   pollSession();
   setInterval(pollSession, 10000);
