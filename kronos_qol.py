@@ -110,7 +110,8 @@ def steam_manifest():
 DEFAULT_STATE = {"presets": {}, "last_buildid": None, "history": [], "sessions": [],
                  "safe_mode_saved": None, "bisect": None, "dark": True,
                  "dev_mode": False, "test_alone": None, "launcher": None,
-                 "assets": {}}  # assets Kronos Plus installed: "Images/x.png" -> {"pack", "added"}
+                 "assets": {},  # assets Kronos Plus installed: "Images/x.png" -> {"pack", "added"}
+                 "names": {}}  # names shown in the app instead of the file name: "zm_mod" -> "My Mod"
 
 
 def launcher_path(state):
@@ -127,6 +128,8 @@ def load_state():
             state = json.load(f)
     except (OSError, ValueError):
         state = {}
+    # A first install has nothing new to show; a state file without this key comes from 1.5 or older.
+    state.setdefault("seen_version", None if os.path.exists(STATE_FILE) else APP_VERSION)
     for k, v in DEFAULT_STATE.items():
         state.setdefault(k, json.loads(json.dumps(v)))
     return state
@@ -210,6 +213,57 @@ def _move_mod(name, src, dst):
         shutil.move(os.path.join(src, f), os.path.join(dst, f))
 
 
+def kronos_mods():
+    """{mod name: sha256} for the mods Kronos ships, from the file list its launcher keeps
+    (kronos/launcher_manifest.txt). The launcher puts any of them back into the scripts folder when it starts."""
+    root, scripts = os.path.dirname(game_dir()), os.path.normcase(os.path.normpath(scripts_dir()))
+    mods = {}
+    try:
+        with open(os.path.join(kronos_dir(), "launcher_manifest.txt"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) != 5 or parts[0] != "f" or not parts[4].lower().endswith(".gsc"):
+                    continue
+                path = os.path.normpath(os.path.join(root, parts[4]))
+                if os.path.normcase(os.path.dirname(path)) == scripts:
+                    mods[os.path.basename(path)[:-4]] = parts[2].lower()
+    except OSError:
+        pass
+    return mods
+
+
+def _sha256(path):
+    import hashlib
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read(MAX_MOD_BYTES * 4)).hexdigest()
+
+
+def resolve_restored_mods(skip=()):
+    """Kronos's launcher puts its own mods back when it starts, so one you turned off ends up in both folders.
+    Keep it off: the copy the launcher put back (it matches the launcher's file list) replaces the turned-off one,
+    whose old version is backed up if it differs. Mods in `skip` (owned by packs) are left alone.
+    Returns the names fixed."""
+    fixed = []
+    for name, digest in kronos_mods().items():
+        on, off = os.path.join(scripts_dir(), name + ".gsc"), os.path.join(disabled_dir(), name + ".gsc")
+        if name in skip or not (os.path.isfile(on) and os.path.isfile(off)):
+            continue
+        try:
+            if _sha256(on) != digest:
+                continue  # not the launcher's copy, so don't guess which one is wanted
+            if _sha256(off) != digest:
+                backup_mod_file(off)
+            os.replace(on, off)
+            compiled = os.path.join(scripts_dir(), "compiled", name + ".gscc")
+            if os.path.isfile(compiled):
+                os.makedirs(os.path.join(disabled_dir(), "compiled"), exist_ok=True)
+                os.replace(compiled, os.path.join(disabled_dir(), "compiled", name + ".gscc"))
+        except OSError:
+            continue
+        fixed.append(name)
+    return fixed
+
+
 def set_mod_enabled(name, enabled):
     src, dst = (disabled_dir(), scripts_dir()) if enabled else (scripts_dir(), disabled_dir())
     if os.path.exists(os.path.join(src, name + ".gsc")):
@@ -225,6 +279,25 @@ def delete_mod(name):
     backup_mod_file(p)
     if not recycle([os.path.join(folder, f) for f in _mod_files(name, folder)]) or os.path.exists(p):
         raise ValueError(f"Couldn't delete {name}. Is the file open in another program?")
+
+
+MAX_DISPLAY_NAME = 60
+
+
+def rename_mod(state, name, title):
+    """Show a mod under another name in the app. The file keeps its name, so Kronos, packs, presets
+    and other mods that require it aren't affected. An empty title goes back to the file name."""
+    if name not in {n for n, _, _ in list_mods()}:
+        raise ValueError(f"{name} isn't installed.")
+    title = " ".join(str(title or "").split())
+    if len(title) > MAX_DISPLAY_NAME:
+        raise ValueError(f"Keep the name to {MAX_DISPLAY_NAME} characters or fewer.")
+    if title and title != name:
+        state["names"][name] = title
+    else:
+        state["names"].pop(name, None)
+    save_state(state)
+    return title if title and title != name else None
 
 
 def recycle(paths):
@@ -1115,7 +1188,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "1.5"  # releases are numbered 1.2, 1.3, ...
+APP_VERSION = "1.6"  # releases are numbered 1.2, 1.3, ...
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")
@@ -1438,6 +1511,16 @@ def console_read(cursor, tail=40, max_bytes=256 * 1024):
 
 def running_processes():
     """Lowercase exe names of running programs, read straight from Windows (no hidden tasklist runs)."""
+    return {name for _, name in _process_list()}
+
+
+def process_ids(exe):
+    """Process ids of every running copy of a program, e.g. "kronoslauncher.exe"."""
+    return {pid for pid, name in _process_list() if name == exe.lower()}
+
+
+def _process_list():
+    """[(pid, lowercase exe name)] of running programs."""
     import ctypes
     from ctypes import wintypes
 
@@ -1454,18 +1537,18 @@ def running_processes():
     k32.CloseHandle.argtypes = [wintypes.HANDLE]
     snap = k32.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
     if not snap or snap == wintypes.HANDLE(-1).value:
-        return set()
-    names = set()
+        return []
+    found = []
     try:
         entry = PROCESSENTRY32W()
         entry.dwSize = ctypes.sizeof(entry)
         ok = k32.Process32FirstW(snap, ctypes.byref(entry))
         while ok:
-            names.add(entry.szExeFile.lower())
+            found.append((entry.th32ProcessID, entry.szExeFile.lower()))
             ok = k32.Process32NextW(snap, ctypes.byref(entry))
     finally:
         k32.CloseHandle(snap)
-    return names
+    return found
 
 
 class SessionTracker:
@@ -1580,6 +1663,291 @@ def prelaunch_problems(state):
     if state.get("safe_mode_saved") is not None:
         problems.append("Safe mode is on, so all mods are off.")
     return problems
+
+
+# ---------------------------------------------------------------- help report
+
+def _tail(path, lines, keep=lambda line: True):
+    try:
+        text = read_log(path, 128 * 1024)
+    except OSError:
+        return []
+    return [line[:300] for line in text.splitlines() if line.strip() and keep(line)][-lines:]
+
+
+def help_report(state, packs):
+    """Plain text describing this setup, for asking for help in the Kronos Discord.
+
+    Your Windows user folder and in-game name are blanked out."""
+    out = [f"Kronos Plus {APP_VERSION} help report ({now_str()})",
+           f"Game folder: {game_dir()}", f"Scripts folder: {scripts_dir()}"]
+    build = steam_buildid()
+    out.append(f"BO7 Steam build: {build or 'unknown'}" + (" (updated since the last check)" if steam_updated(state)[0] else ""))
+    if state.get("safe_mode_saved") is not None:
+        out.append("Safe mode: ON (every mod is off)")
+    if state.get("test_alone"):
+        out.append(f"Testing alone: {state['test_alone']['mod']}")
+    if state.get("bisect"):
+        out.append("Crash search in progress: only some mods are on")
+
+    mods = list_mods()
+    def label(name):
+        man = load_manifest(name) or {}
+        extra = [f"v{man['version']}"] if man.get("version") else []
+        extra += ["precompiled"] if is_prepared(name) else []
+        extra += [f'shown as "{state["names"][name]}"'] if state["names"].get(name) else []
+        return name + (f" ({', '.join(extra)})" if extra else "")
+    on = [label(n) for n, enabled, _ in mods if enabled]
+    off = [label(n) for n, enabled, _ in mods if not enabled]
+    out += ["", f"Mods on ({len(on)}): " + (", ".join(on) or "none"), f"Mods off ({len(off)}): " + (", ".join(off) or "none")]
+    if packs:
+        out.append(f"Packs ({len(packs)}): " + ", ".join(
+            f"{p['name']} ({'on' if p['enabled'] else 'off'}, {len(p['files'])} files)" for p in packs))
+
+    out += ["", "Health check:"]
+    for ok, title, detail in health_checks(state):
+        out.append(f"  {'OK ' if ok else 'BAD' if ok is False else '?  '} {title}: {detail}")
+    for name in enabled_mods():
+        ok, msg = compile_check(name)
+        if ok is False:
+            out.append(f"  BAD {name} doesn't compile: {msg.splitlines()[-1] if msg else ''}")
+
+    sessions = state["sessions"][-5:]
+    if sessions:
+        out += ["", "Last sessions:"] + [f"  {s['start']}, {s['minutes']} min{', CRASHED' if s['crash'] else ''}"
+                                         for s in reversed(sessions)]
+    suspects = crash_suspects(state)[:3]
+    if suspects:
+        out.append("Crash suspects: " + ", ".join(f"{m} (on in {round(r * 100)}% of {t} sessions that crashed)" for m, r, t in suspects))
+
+    if os.path.isfile(crash_file()):
+        when = datetime.datetime.fromtimestamp(os.path.getmtime(crash_file())).strftime("%Y-%m-%d %H:%M")
+        out += ["", f"Last crash report ({when}):"] + ["  " + line for line in _tail(crash_file(), 25)]
+    logs = [p for p in list_logs() if os.path.normcase(p) != os.path.normcase(crash_file())]
+    if logs:
+        errors = _tail(logs[0], 20, LOG_HIGHLIGHT.search)
+        out += ["", f"Errors in the newest log ({os.path.basename(logs[0])}):"] + (["  " + line for line in errors] or ["  none"])
+
+    text = "\n".join(out)
+    home = os.path.expanduser("~")
+    if len(home) > 3:
+        text = re.sub(re.escape(home), "%USERPROFILE%", text, flags=re.I)
+    try:
+        player = str(get_path(load_settings(), ("player", "name"), "") or "").strip()
+    except (OSError, ValueError):
+        player = ""
+    if len(player) >= 3 and player.lower() not in {"kronos", "player", "unknown", "zombies"}:
+        text = re.sub(r"(?<!\w)" + re.escape(player) + r"(?!\w)", "[player]", text, flags=re.I)
+    # One code block keeps Discord from eating the formatting.
+    return "```\n" + text.replace("```", "'''") + "\n```"
+
+
+# ---------------------------------------------------------------- full backups
+
+SETUP_MARKER = "kronos_plus_backup.json"
+SETUP_FOLDERS = ("scripts", "disabled", "assets", "library")
+SETUP_LIBRARY = ("index.json", "objects")  # the pack registry and its stored files, not its lock or journals
+SETUP_STATE = ("presets", "assets", "names")
+SETUP_KEPT = 3  # automatic backups made before a restore
+MAX_SETUP_BYTES = 2 * 1024 ** 3
+MAX_SETUP_FILES = 50000
+NOT_A_BACKUP = "That file isn't a Kronos Plus backup."
+
+
+def _is_link(path):
+    return os.path.islink(path) or bool(getattr(os.lstat(path), "st_file_attributes", 0) & 0x400)
+
+
+def _setup_roots():
+    return dict(zip(SETUP_FOLDERS, (scripts_dir(), disabled_dir(), assets_dir(), pack_library_dir())))
+
+
+def _setup_files():
+    """(name in the zip, path on disk) for everything a full backup holds. Links and temp files are skipped."""
+    for part, root in _setup_roots().items():
+        if not os.path.isdir(root):
+            continue
+        for here, dirs, files in os.walk(root):
+            rel = os.path.relpath(here, root)
+            if part == "library" and rel == ".":
+                dirs[:] = [d for d in dirs if d in SETUP_LIBRARY]
+                files = [f for f in files if f in SETUP_LIBRARY]
+            dirs[:] = sorted(d for d in dirs if not _is_link(os.path.join(here, d)))
+            for f in sorted(files):
+                p = os.path.join(here, f)
+                if f.startswith((".kp-", "~")) or _is_link(p):
+                    continue
+                yield "/".join([part] + ([] if rel == "." else rel.split(os.sep)) + [f]), p
+
+
+def create_setup_backup(zip_path, state):
+    """Zip mods, assets, the pack library, Kronos's settings.json and the app's presets and names.
+    Returns what it holds."""
+    counts = {"mods": 0, "assets": 0, "files": 0, "packs": len(pack_manager().snapshot()["packs"])}
+    temporary = zip_path + ".part"
+    try:
+        with pack_manager().locked(), zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as z:
+            for arc, path in _setup_files():
+                z.write(path, arc)
+                counts["files"] += 1
+                if arc.startswith(("scripts/", "disabled/")) and arc.count("/") == 1 and arc.lower().endswith(".gsc"):
+                    counts["mods"] += 1
+                elif arc.startswith("assets/"):
+                    counts["assets"] += 1
+            if os.path.isfile(settings_path()):
+                z.write(settings_path(), "settings.json")
+            z.writestr(SETUP_MARKER, json.dumps({"app": "Kronos Plus", "version": APP_VERSION, "made": now_str(),
+                                                 **counts, "state": {k: state.get(k) for k in SETUP_STATE}}, indent=2))
+        os.replace(temporary, zip_path)
+    finally:
+        _try_remove(temporary)
+    return counts
+
+
+def _setup_target(arc):
+    """The folder key and path parts a zip entry restores to; raises for anything a backup can't hold."""
+    try:
+        parts = content.safe_parts(arc)
+    except ValueError:
+        raise ValueError(NOT_A_BACKUP) from None
+    if len(parts) < 2 or parts[0] not in SETUP_FOLDERS or (parts[0] == "library" and parts[1] not in SETUP_LIBRARY):
+        raise ValueError(NOT_A_BACKUP)
+    return parts[0], parts[1:]
+
+
+def read_setup_backup(path):
+    """What a full backup holds, after checking every file in it lands where a backup may write."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            info = json.loads(z.read(SETUP_MARKER))
+            items = [i for i in z.infolist() if not i.is_dir()]
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+        raise ValueError(NOT_A_BACKUP) from None
+    if not isinstance(info, dict) or info.get("app") != "Kronos Plus" or len(items) > MAX_SETUP_FILES:
+        raise ValueError(NOT_A_BACKUP)
+    for item in items:
+        if item.filename not in (SETUP_MARKER, "settings.json"):
+            _setup_target(item.filename)
+    size = sum(i.file_size for i in items)
+    if size > MAX_SETUP_BYTES:
+        raise ValueError("That backup is too big to restore.")
+    return {"made": str(info.get("made", "")), "version": str(info.get("version", "")), "size": size,
+            "mods": int(info.get("mods") or 0), "assets": int(info.get("assets") or 0), "packs": int(info.get("packs") or 0),
+            "settings": any(i.filename == "settings.json" for i in items)}
+
+
+def restore_setup_backup(path, state):
+    """Put a full backup back. The current setup is backed up first, every folder is unpacked next to
+    its target, and only then swapped in, so a failure leaves everything as it was."""
+    read_setup_backup(path)
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    create_setup_backup(os.path.join(BACKUP_DIR, f"setup-before-restore-{stamp}.zip"), state)
+    for old in sorted(f for f in os.listdir(BACKUP_DIR) if f.startswith("setup-before-restore-"))[:-SETUP_KEPT]:
+        _try_remove(os.path.join(BACKUP_DIR, old))
+
+    roots = _setup_roots()
+    staged, swapped, settings_data = {}, [], None
+    with pack_manager().locked(), zipfile.ZipFile(path) as z:
+        try:
+            for part, root in roots.items():
+                os.makedirs(os.path.dirname(root), exist_ok=True)
+                staged[part] = tempfile.mkdtemp(prefix=".kp-restore-", dir=os.path.dirname(root))
+            for item in z.infolist():
+                if item.is_dir() or item.filename == SETUP_MARKER:
+                    continue
+                if item.filename == "settings.json":
+                    settings_data = z.read(item)
+                    json.loads(settings_data)  # never restore a broken settings file
+                    continue
+                part, parts = _setup_target(item.filename)
+                dest = os.path.join(staged[part], *parts)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with z.open(item) as src, open(dest, "wb") as out:
+                    shutil.copyfileobj(src, out)
+
+            def swap(target, new):
+                old = None
+                if os.path.lexists(target):
+                    old = target + ".kp-old-" + stamp
+                    os.rename(target, old)
+                if os.path.exists(new):
+                    try:
+                        os.rename(new, target)
+                    except OSError:
+                        if old:
+                            os.rename(old, target)
+                        raise
+                swapped.append((target, old))
+
+            for part in ("scripts", "disabled", "assets"):
+                swap(roots[part], staged[part])
+            # The library folder holds the open lock file, so its contents are swapped instead.
+            for name in SETUP_LIBRARY:
+                swap(os.path.join(roots["library"], name), os.path.join(staged["library"], name))
+            if settings_data is not None:
+                if os.path.isfile(settings_path()):
+                    backup_settings()
+                with open(settings_path() + ".kp-new", "wb") as f:
+                    f.write(settings_data)
+                os.replace(settings_path() + ".kp-new", settings_path())
+        except (OSError, ValueError, zipfile.BadZipFile) as e:
+            for target, old in reversed(swapped):
+                if os.path.isdir(target):
+                    shutil.rmtree(target, ignore_errors=True)
+                elif os.path.lexists(target):
+                    os.remove(target)
+                if old:
+                    os.rename(old, target)
+            raise ValueError("Couldn't restore the backup, so nothing was changed. Close the game and any of "
+                             f"its folders open in Explorer, then try again. ({e})") from None
+        finally:
+            for folder in staged.values():
+                shutil.rmtree(folder, ignore_errors=True)
+            _try_remove(settings_path() + ".kp-new")
+    # What was there before goes to the Recycle Bin (it's also in the automatic backup).
+    olds = [old for _, old in swapped if old]
+    if olds and not recycle(olds):
+        for old in olds:
+            _try_remove(old)
+
+    with zipfile.ZipFile(path) as z:
+        saved = json.loads(z.read(SETUP_MARKER)).get("state") or {}
+    for key in SETUP_STATE:
+        if isinstance(saved.get(key), dict):
+            state[key] = saved[key]
+    save_state(state)
+
+
+# ---------------------------------------------------------------- what's new
+
+RELEASE_PAGE = "https://github.com/DellxCell/kronos-plus/releases/tag/v{}"
+RELEASE_TAG_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/tags/v{}"
+
+
+def release_notes(version):
+    """The GitHub release notes for a version, or "" when GitHub can't be reached."""
+    request = urllib.request.Request(RELEASE_TAG_API.format(version), headers={"User-Agent": "KronosPlus",
+                                                                                "Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as r:
+            return str(json.loads(r.read(2 * 1024 * 1024)).get("body") or "")[:3000]
+    except (urllib.error.URLError, OSError, ValueError, AttributeError):
+        return ""
+
+
+def whats_new(state):
+    """Once after Kronos Plus updates: {"version", "notes", "url"} for this version, else None."""
+    seen = state.get("seen_version")
+    if seen == APP_VERSION:
+        return None
+    saved = state.pop("update_notes", None)
+    state["seen_version"] = APP_VERSION
+    save_state(state)
+    if seen and (version_tuple(seen) or ()) >= version_tuple(APP_VERSION):
+        return None  # went back to an older version
+    notes = saved["notes"] if isinstance(saved, dict) and saved.get("version") == APP_VERSION else release_notes(APP_VERSION)
+    return {"version": APP_VERSION, "notes": notes, "url": RELEASE_PAGE.format(APP_VERSION)}
 
 
 # ---------------------------------------------------------------- UI

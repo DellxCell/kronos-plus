@@ -10,7 +10,7 @@ It only works with files on your PC: it never touches the game while it runs and
 
 Get the latest zip from **[Releases](../../releases)**, unzip the whole `Kronos Plus` folder, and run `Kronos Plus.exe`.
 
-From 1.2 on, the app updates itself: when a new release is out it shows **Update now**.
+From 1.2 on, the app updates itself: when a new release is out it shows **Update now**, and after updating it shows what's new.
 
 Every release zip is built by GitHub Actions straight from this code (see the Actions tab), so what you download is what you can read here.
 
@@ -20,6 +20,7 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 
 **For players**
 - Mod manager: turn mods on/off, save presets, undo any change
+- Rename mods: right-click a mod (or press F2) to show it under a name you pick; the file stays the same
 - Install from Discord: paste a #mods or #assets post link (or a file link) and it finds the files for you (safety-checked first)
 - Assets: browse Kronos's images, Lua and other assets with previews, add new ones, delete what you don't want
 - Packs: every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post
@@ -29,6 +30,8 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 - Safe mode: all mods off in one click, back on when you're done
 - Find the crashing mod: a guided search that narrows it down for you
 - Crash suspects & play history: see which mods were on when the game crashed
+- Ask for help: copy a report of your mods, health check and latest errors to paste in the Kronos Discord (your Windows user folder and in-game name are left out)
+- Full backup: save mods, assets, packs, presets and settings in one file, and restore it in one click
 - Settings editor: Kronos's gameplay options, name and keys, with backups
 - Health check: Kronos set up right, Steam folder clean, BO7 update warnings, mod conflicts
 

@@ -46,6 +46,14 @@ ICON = os.path.join(core.APP_DIR, "kronos_plus.ico")
 TITLE = "Kronos Plus"
 ASSETS_FORUM = "1564034358094864515/1564893868724588645"
 MODS_FORUM = "1564034358094864515/1564893232985415700"  # Kronos Discord server / #mods forum
+# Folders shown in Settings: key -> (label, where, note). Kronos's launcher decides the first three.
+FOLDERS = {
+    "mods": ("Mods", core.scripts_dir, "Mods that are on. Change it with the Kronos launcher's Scripts folder setting."),
+    "disabled": ("Turned-off mods", core.disabled_dir, "Kronos Plus moves mods here when you turn them off."),
+    "assets": ("Assets", core.assets_dir, "Images, Lua and other files Kronos loads."),
+    "game": ("Game", core.game_dir, "Your Kronos copy of BO7. Change it in the Kronos launcher."),
+    "backups": ("Kronos Plus backups", lambda: core.BACKUP_DIR, "Settings backups, and the automatic backup made before a restore."),
+}
 
 
 def set_window_icon():
@@ -82,6 +90,30 @@ def set_window_icon():
         user32.PostMessageW(hwnd, 0x80, 1, big)
 
 
+def focus_window(pids):
+    """Bring a visible window of one of these processes to the front (restoring it if minimized).
+    True if there was one."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value in pids and user32.IsWindowVisible(hwnd) and user32.GetWindowTextLengthW(hwnd):
+            found.append(hwnd)
+        return True
+
+    user32.EnumWindows(each, 0)
+    for hwnd in found[:1]:
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+    return bool(found)
+
+
 def clipboard_text():
     """(change counter, text) of the Windows clipboard; text is "" if it holds no text."""
     import ctypes
@@ -102,6 +134,37 @@ def clipboard_text():
             return seq, ctypes.wstring_at(pointer)[:2000]
         finally:
             kernel32.GlobalUnlock(handle)
+    finally:
+        user32.CloseClipboard()
+
+
+def set_clipboard_text(text):
+    """Put text on the Windows clipboard; False if another program is holding it."""
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalLock.argtypes = kernel32.GlobalUnlock.argtypes = kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    user32.SetClipboardData.restype = wintypes.HANDLE
+    data = ctypes.create_unicode_buffer(text)
+    handle = kernel32.GlobalAlloc(0x0002, ctypes.sizeof(data))  # GMEM_MOVEABLE
+    pointer = kernel32.GlobalLock(handle) if handle else None
+    if not pointer:
+        return False
+    ctypes.memmove(pointer, data, ctypes.sizeof(data))
+    kernel32.GlobalUnlock(handle)
+    if not user32.OpenClipboard(None):
+        kernel32.GlobalFree(handle)
+        return False
+    try:
+        user32.EmptyClipboard()
+        if not user32.SetClipboardData(13, handle):  # CF_UNICODETEXT; Windows owns the memory once this works
+            kernel32.GlobalFree(handle)
+            return False
+        return True
     finally:
         user32.CloseClipboard()
 
@@ -134,8 +197,18 @@ class Api:
             self._packs = PackServices(core, self._state)
         return self._packs
 
+    def _resolve_restored(self):
+        """Turn Kronos's own mods back off after its launcher put them back (see core.resolve_restored_mods)."""
+        try:
+            managed = self._pack_services().snapshot()["managed_paths"]
+        except (ValueError, OSError):
+            return []
+        packed = {p[:-4] for p in managed if core.is_source_mod(p)}
+        return core.resolve_restored_mods(packed)
+
     def _pack_call(self, method, *args):
         import zipfile
+        self._resolve_restored()
         try:
             return method(*args)
         except (ValueError, OSError, zipfile.BadZipFile) as error:
@@ -145,11 +218,14 @@ class Api:
 
     def overview(self):
         s = self._state
+        self._resolve_restored()
         updated, last, build = core.steam_updated(s)
         mods = []
+        bundled = core.kronos_mods()
         for n, on, d in core.list_mods():
             man = core.load_manifest(n) or {}
-            mods.append({"name": n, "enabled": on, "desc": d, "prepared": core.is_prepared(n),
+            mods.append({"name": n, "title": s["names"].get(n, ""), "enabled": on, "desc": d, "prepared": core.is_prepared(n),
+                         "kronos": n in bundled,
                          "version": man.get("version", ""), "author": man.get("author", "")})
         banners = []
         if s.get("test_alone"):
@@ -159,7 +235,7 @@ class Api:
         if updated:
             banners.append({"kind": "warn", "text": f"Steam updated BO7 (build {last} → {build}). Check the Kronos Discord before playing."})
         if s.get("safe_mode_saved") is not None:
-            banners.append({"kind": "info", "text": "Safe mode is on — every mod is off."})
+            banners.append({"kind": "info", "text": "Safe mode is on, so every mod is off."})
         if s.get("bisect"):
             b = s["bisect"]
             banners.append({"kind": "info", "text": f"Crash search round {b['round']}: testing {len(b['testing'])} of {len(b['suspects'])} suspects."})
@@ -168,6 +244,7 @@ class Api:
             "mods": mods,
             "enabledCount": sum(m["enabled"] for m in mods),
             "gameDir": core.game_dir(),
+            "folders": [{"key": k, "label": label, "path": path(), "note": note} for k, (label, path, note) in FOLDERS.items()],
             "modsForumUrl": "https://discord.com/channels/" + MODS_FORUM,
             "assetsForumUrl": "https://discord.com/channels/" + ASSETS_FORUM,
             "presets": sorted(s["presets"]),
@@ -211,11 +288,20 @@ class Api:
             new_dir = core.download_update(self._update)
         except ValueError as e:
             return str(e)
+        # The new version shows these once it opens.
+        self._state["update_notes"] = {"version": self._update["version"], "notes": self._update["notes"]}
+        core.save_state(self._state)
         subprocess.Popen([os.path.join(new_dir, core.APP_EXE), "--finish-update",
                           os.path.dirname(sys.executable), str(os.getpid())], cwd=new_dir)
         self._updating = True
         self._window.destroy()
         return None
+
+    def whats_new(self):
+        return core.whats_new(self._state)
+
+    def open_release_page(self):
+        os.startfile(core.RELEASE_PAGE.format(core.APP_VERSION))
 
     def set_theme(self, dark):
         self._state["dark"] = bool(dark)
@@ -246,7 +332,16 @@ class Api:
             core.delete_mod(name)
         except ValueError as e:
             return str(e)
+        if self._state["names"].pop(name, None) is not None:
+            core.save_state(self._state)
         return None
+
+    def rename_mod(self, name, title):
+        """{"title"} (None means it shows its file name again) or {"error"}."""
+        try:
+            return {"title": core.rename_mod(self._state, name, title)}
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
 
     def source(self, name):
         p = core.mod_path(name)
@@ -355,6 +450,12 @@ class Api:
         os.makedirs(core.assets_dir(), exist_ok=True)
         os.startfile(core.assets_dir())
 
+    def open_folder(self, key):
+        if key in FOLDERS:
+            path = FOLDERS[key][1]()
+            os.makedirs(path, exist_ok=True)
+            os.startfile(path)
+
     # ---------------------------------------------------------- assets
 
     def assets(self):
@@ -459,6 +560,7 @@ class Api:
     # ---------------------------------------------------------- troubleshoot
 
     def safe_mode(self, on):
+        self._resolve_restored()
         if on and self._state.get("test_alone"):
             return "Stop testing your mod first."
         if on and self._state.get("safe_mode_saved") is None:
@@ -468,24 +570,90 @@ class Api:
             core.safe_mode_off(self._state)
 
     def bisect_start(self):
+        self._resolve_restored()
         return core.bisect_start(self._state)
 
     def bisect_answer(self, crashed):
         if not self._state.get("bisect"):
             return None
+        self._resolve_restored()
         return core.bisect_answer(self._state, crashed)
 
     def bisect_cancel(self):
         core.bisect_cancel(self._state)
 
+    def help_report(self):
+        try:
+            return {"text": core.help_report(self._state, self._pack_services().snapshot()["packs"])}
+        except (ValueError, OSError) as e:
+            return {"error": f"Couldn't make the report: {e}"}
+
+    def copy_help_report(self):
+        report = self.help_report()
+        if "error" in report:
+            return report
+        if not set_clipboard_text(report["text"]):
+            return {"error": "Couldn't copy. Another program is using the clipboard, try again."}
+        return {"chars": len(report["text"])}
+
+    # ---------------------------------------------------------- full backups
+
+    def backup_setup(self):
+        import datetime
+        import webview
+        p = self._dialog(webview.SAVE_DIALOG, save_filename=f"Kronos Plus backup {datetime.date.today()}.zip",
+                         file_types=("Kronos Plus backup (*.zip)",))
+        if not p:
+            return None
+        p = p if isinstance(p, str) else p[0]
+        if not p.lower().endswith(".zip"):
+            p += ".zip"
+        try:
+            return {"file": os.path.basename(p), **core.create_setup_backup(p, self._state)}
+        except (ValueError, OSError) as e:
+            return {"error": f"Couldn't make the backup: {e}"}
+
+    def pick_setup_backup(self):
+        """Choose a backup to restore and say what's in it; restore_setup then restores that file."""
+        import webview
+        picked = self._dialog(webview.OPEN_DIALOG, file_types=("Kronos Plus backup (*.zip)",))
+        if not picked:
+            return None
+        path = picked if isinstance(picked, str) else picked[0]
+        try:
+            info = core.read_setup_backup(path)
+        except ValueError as e:
+            return {"error": str(e)}
+        self._restore_path = path
+        return {"file": os.path.basename(path), **info}
+
+    def restore_setup(self):
+        path = getattr(self, "_restore_path", None)
+        if not path:
+            return {"error": "Choose a backup first."}
+        if self._tracker.current or "cod25-cod.exe" in core.running_processes():
+            return {"error": "Close the game first, then restore."}
+        if self._state.get("test_alone") or self._state.get("bisect"):
+            return {"error": "Finish testing or the crash search first, then restore."}
+        try:
+            core.restore_setup_backup(path, self._state)
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
+        self._restore_path = None
+        self._pack_services().close()  # install reviews made before the restore no longer fit
+        return {"ok": True}
+
     # ---------------------------------------------------------- sessions
 
     def poll_session(self):
+        """"idle" | "playing" | "ended" | "ended-test", or {"state", "fixed"} when Kronos mods the launcher
+        put back were turned off again."""
         r = self._tracker.poll()
         if r == "ended" and self._state.get("test_alone"):
             core.test_alone_stop(self._state)
-            return "ended-test"
-        return r
+            r = "ended-test"
+        fixed = self._resolve_restored() if "kronoslauncher.exe" in core.running_processes() else []
+        return {"state": r, "fixed": fixed} if fixed else r
 
     def sessions(self):
         s = self._state["sessions"]
@@ -616,6 +784,7 @@ class Api:
         return {"rows": rows, "cursor": cursor, "files": [os.path.basename(p) for p in core.console_files()]}
 
     def test_alone(self, name):
+        self._resolve_restored()
         return core.test_alone_start(self._state, name)
 
     def stop_test(self):
@@ -640,20 +809,35 @@ class Api:
         core.save_state(self._state)
 
     def prelaunch(self):
+        if "cod25-cod.exe" in core.running_processes():
+            return []  # nothing to check: launch() says the game is already running
         return core.prelaunch_problems(self._state)
 
     def launch(self):
+        """Open Kronos's launcher, where the game is started. {"status": "playing" | "shown" | "opened"} or {"error"}.
+
+        Starting the launcher while it's already open does nothing visible, so an open one is brought to the front."""
+        procs = core.running_processes()
+        if "cod25-cod.exe" in procs:
+            return {"status": "playing"}
+        if "kronoslauncher.exe" in procs and focus_window(core.process_ids("kronoslauncher.exe")):
+            return {"status": "shown"}
         launcher = core.launcher_path(self._state)
         if not launcher:
             import webview
             picked = self._dialog(webview.OPEN_DIALOG, file_types=("Kronos launcher (KronosLauncher.exe)",))
             if not picked:
-                return "Couldn't find KronosLauncher.exe. Pick it to play from here."
+                return {"error": "Couldn't find KronosLauncher.exe. Pick it to play from here."}
             launcher = picked[0] if isinstance(picked, (list, tuple)) else picked
             self._state["launcher"] = launcher
             core.save_state(self._state)
-        os.startfile(launcher)
-        return None
+        try:
+            os.startfile(launcher)
+        except OSError as e:
+            if getattr(e, "winerror", None) == 1223:  # the user said No to Windows' permission prompt
+                return {"error": "The Kronos launcher needs your OK to start. Click Play again and choose Yes."}
+            return {"error": f"Couldn't start the Kronos launcher: {e.strerror or e}"}
+        return {"status": "opened"}
 
 
 WEBVIEW2_KEY = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"

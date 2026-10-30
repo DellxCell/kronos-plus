@@ -216,6 +216,10 @@ class PackManager:
                     else:
                         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
+    def locked(self):
+        """Hold the library lock so nothing else changes packs, e.g. while a full backup is made or restored."""
+        return self._locked()
+
     def _recover(self):
         folder = os.path.join(self.library, "transactions")
         if not os.path.isdir(folder):

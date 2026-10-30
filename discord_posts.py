@@ -172,6 +172,57 @@ def _discord_windows():
     return found
 
 
+def _legacy_forum(document, automation, U):
+    """Confirm the current thread's parent from Discord's visible channel sidebar.
+
+    Copy Message Link opens /guild/thread/message. That route omits the forum,
+    even though the sidebar still puts the thread directly under its parent.
+    Require both that parent link and the current thread title; merely having
+    #mods somewhere in the server's channel list is not sufficient evidence.
+    """
+    title = document.GetCurrentPropertyValue(U.UIA_NamePropertyId)
+    if not isinstance(title, str) or " | " not in title:
+        return None
+    title = title.rsplit(" | ", 1)[0].strip()
+    if len(title) >= 2 and title[0] == title[-1] == '"':
+        title = title[1:-1]
+    if not title:
+        return None
+    walker = automation.ControlViewWalker
+    links = document.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+        U.UIA_ControlTypePropertyId, U.UIA_HyperlinkControlTypeId))
+    found = set()
+    for index in range(min(links.Length, 1000)):
+        link = links.GetElement(index)
+        try:
+            route = None
+            for prop in (U.UIA_ValueValuePropertyId, U.UIA_LegacyIAccessibleValuePropertyId):
+                route = parse_post_link(link.GetCurrentPropertyValue(prop))
+                if route:
+                    break
+            if not route or route.guild != GUILD_ID or route.forum not in FORUM_IDS or route.thread:
+                continue
+            item = walker.GetParentElement(link)
+            for _ in range(5):
+                if not item or item.GetCurrentPropertyValue(U.UIA_ControlTypePropertyId) == U.UIA_ListItemControlTypeId:
+                    break
+                item = walker.GetParentElement(item)
+            if not item or item.GetCurrentPropertyValue(U.UIA_ControlTypePropertyId) != U.UIA_ListItemControlTypeId:
+                continue
+            following = walker.GetNextSiblingElement(item)
+            if not following or following.GetCurrentPropertyValue(U.UIA_ControlTypePropertyId) != U.UIA_ListItemControlTypeId:
+                continue
+            buttons = following.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                U.UIA_ControlTypePropertyId, U.UIA_ButtonControlTypeId))
+            for button_index in range(min(buttons.Length, 100)):
+                name = buttons.GetElement(button_index).GetCurrentPropertyValue(U.UIA_NamePropertyId)
+                if name == title or (isinstance(name, str) and name.startswith(title + " (") and name.endswith(")")):
+                    found.add(route.forum)
+        except Exception:
+            continue
+    return next(iter(found)) if len(found) == 1 else None
+
+
 def read_snapshot(target: PostLink) -> dict:
     """One bounded, read-only scan. Must run in the dedicated helper process."""
     sys.coinit_flags = 0  # UI Automation clients run in an MTA, away from the GUI.
@@ -198,10 +249,16 @@ def read_snapshot(target: PostLink) -> dict:
                 continue
             url = value(document)
             active = parse_post_link(url)
-            if (not active or active.guild != GUILD_ID or active.forum not in FORUM_IDS
-                    or (target.forum and active.forum != target.forum)):
+            if not active or active.guild != GUILD_ID:
                 continue
             if target.thread and active.thread != target.thread:
+                continue
+            if active.forum is None and active.thread:
+                forum = _legacy_forum(document, automation, U)
+                if forum:
+                    active = PostLink(active.guild, forum, active.thread, active.message)
+                    url = active.url
+            if active.forum not in FORUM_IDS or (target.forum and active.forum != target.forum):
                 continue
             if not active.thread:
                 return {"url": url}
