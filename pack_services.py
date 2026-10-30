@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import threading
 import uuid
 
 from discord_posts import GUILD_ID, FORUM_IDS, parse_post_link
 from pack_manager import MAX_BATCH_BYTES
+from discord_downloads import DownloadWatch, matches_download
 
 
 def source_link(url):
@@ -22,6 +24,7 @@ class PackServices:
     def __init__(self, core, state):
         self.core, self.state = core, state
         self._plans = {}
+        self._preview_watches = {}
         self._lock = threading.RLock()
 
     @property
@@ -53,11 +56,12 @@ class PackServices:
                     continue
                 pack_name, batch, rejected = os.path.splitext(name)[0], {name: data}, []
             else:
-                choices = self.core.content.asset_folders_for(name) if not path.lower().endswith(".zip") else []
+                choices = self.core.content.asset_folders_for(name) if os.path.splitext(path)[1].lower() not in self.core.content.ARCHIVE_EXTENSIONS else []
                 if choices:
                     default = self.core.content.DEFAULT_FOLDERS.get(os.path.splitext(name)[1].lower())
                     folder = folder or default
-                    destinations.append({"index": str(index), "name": name, "folders": choices, "selected": folder})
+                    if len(choices) > 1:
+                        destinations.append({"index": str(index), "name": name, "folders": choices, "selected": folder})
                     if not folder:
                         names.append(os.path.splitext(name)[0])
                         continue
@@ -91,7 +95,11 @@ class PackServices:
             self._plans[token] = plan
         mods = sorted(relative for relative in files if self.core.is_source_mod(relative))
         assets = sorted(relative for relative in files if relative.startswith("Assets/"))
+        asset_count = len(assets) + sum(not item["selected"] for item in destinations)
+        kind = "mixed" if mods and asset_count else "mods" if mods else "assets" if asset_count else "empty"
         return {"token": token, "name": name, "files": mods + assets, "mods": mods, "assets": assets,
+                "content_kind": kind, "content_page": {"mods": "mods", "assets": "assets"}.get(kind, "packs"),
+                "detected_asset_count": asset_count,
                 "bad": bad, "destinations": destinations, "unresolved": any(not item["selected"] for item in destinations),
                 "source_post": plan["source_post"], "update_id": update_id, **preview}
 
@@ -110,8 +118,62 @@ class PackServices:
                 self.core.forget_download(path)
 
     def close(self):
+        with self._lock:
+            self._preview_watches.clear()
         for token in list(self._plans):
             self.forget(token)
+
+    def cancel_preview(self, job):
+        with self._lock:
+            self._preview_watches.pop(job, None)
+
+    def preview_download_status(self, job, post, update_id=None):
+        with self._lock:
+            watch = self._preview_watches.get(job)
+            if watch is None:
+                watch = self._preview_watches[job] = DownloadWatch([item["name"] for item in post["previews"]])
+            if isinstance(watch, dict):
+                return watch
+            status = watch.poll()
+            if status["status"] == "ready":
+                try:
+                    plan = self.prepare_preview(status["paths"], post, update_id)
+                    result = {"status": "downloaded", "plan": plan}
+                except (OSError, ValueError) as error:
+                    result = {"status": "preview", "message": str(error), "choose_only": True}
+                self._preview_watches[job] = result
+                return result
+            if status["status"] == "choose":
+                return {**post, "message": status["message"], "choose_only": True}
+            return post
+
+    def prepare_preview(self, paths, post, update_id=None):
+        source = source_link(post.get("post_url"))
+        expected = [item["name"] for item in post.get("previews", [])]
+        if not source or not paths or len(paths) > 20 or not expected:
+            raise ValueError("The preview lookup has expired. Open its Discord post again.")
+        copies = []
+        try:
+            for path in paths:
+                name = next((name for name in expected if matches_download(os.path.basename(path), name)), None)
+                if not name:
+                    raise ValueError("Choose a downloaded file with one of the filenames shown in this Discord post.")
+                if os.path.islink(path) or (hasattr(os.path, "isjunction") and os.path.isjunction(path)):
+                    raise ValueError("Choose a regular downloaded file, not a link.")
+                with open(path, "rb") as file:
+                    data = file.read(32 * 1024 * 1024 + 1)
+                if len(data) > 32 * 1024 * 1024:
+                    raise ValueError("The preview file exceeds the 32 MB file limit.")
+                # Preserve the author's filename when Windows adds a duplicate (1) suffix.
+                copy = os.path.join(tempfile.mkdtemp(prefix=self.core.DOWNLOAD_PREFIX), name)
+                copies.append(copy)
+                with open(copy, "wb") as file:
+                    file.write(data)
+            return self.prepare(copies, source_post=source, update_id=update_id)
+        except Exception:
+            for path in copies:
+                self.core.forget_download(path)
+            raise
 
     def download(self, urls, source_post=None, update_id=None):
         if not isinstance(urls, list) or not 1 <= len(urls) <= 20:

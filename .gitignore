@@ -6,3 +6,4 @@ build/
 state.json
 backups/
 kronos_plus.log
+vendor/7zip/

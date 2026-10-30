@@ -11,19 +11,24 @@ import subprocess
 import sys
 import urllib.parse
 
-# The accessibility reader is an isolated, read-only child, not another app window.
-if len(sys.argv) == 4 and sys.argv[1] == "--read-discord-post":
+# Accessibility helpers are isolated children, not additional app windows.
+if ((len(sys.argv) == 4 and sys.argv[1] == "--read-discord-post")
+        or (len(sys.argv) == 6 and sys.argv[1] == "--download-discord-preview")):
     base = os.path.dirname(os.path.abspath(__file__))
     for candidate in (os.path.join(base, "vendor"), os.path.join(os.path.dirname(base), "vendor")):
         if os.path.isdir(candidate):
             sys.path.insert(0, candidate)
             break
-    from discord_posts import helper_main
-    raise SystemExit(helper_main(sys.argv[2], sys.argv[3]))
+    if sys.argv[1] == "--read-discord-post":
+        from discord_posts import helper_main
+        raise SystemExit(helper_main(sys.argv[2], sys.argv[3]))
+    from discord_preview_download import download_main
+    raise SystemExit(download_main(*sys.argv[2:]))
 
 import kronos_qol as core
 from discord_posts import DesktopPostImporter
 from pack_services import PackServices, source_link
+from post_downloads import AutomaticPostDownloads
 
 if getattr(sys, "frozen", False):
     # The windowed .exe has no console: without this, the first print or log line crashes it.
@@ -184,7 +189,7 @@ class Api:
         self._window = None
         self._update = None
         self._updating = False
-        self._post_importer = DesktopPostImporter(open_discord, os.path.abspath(__file__))
+        self._post_importer = DesktopPostImporter(open_discord, os.path.abspath(__file__), on_discovered=self._single_post_attachment)
         self._packs = PackServices(core, self._state)
 
     # ---------------------------------------------------------- helpers
@@ -196,6 +201,28 @@ class Api:
         if not hasattr(self, "_packs"):
             self._packs = PackServices(core, self._state)
         return self._packs
+
+    def _automatic_posts(self):
+        if not hasattr(self, "_auto_posts"):
+            self._auto_posts = AutomaticPostDownloads(self._post_importer, self._pack_services(), on_ready=self._show_import)
+        return self._auto_posts
+
+    def _single_post_attachment(self, job, update_id=None):
+        # Run independently of WebView timers while Discord covers the main app.
+        post = self._post_importer.status(job)
+        if len(post.get("files", [])) + len(post.get("previews", [])) == 1:
+            self._automatic_posts().start(job, [0], update_id)
+        else:
+            self._show_import()
+
+    def _show_import(self):
+        if getattr(self, "_window", None):
+            try:
+                self._window.restore()
+                self._window.on_top = True
+                self._window.on_top = False
+            except Exception:
+                pass
 
     def _resolve_restored(self):
         """Turn Kronos's own mods back off after its launcher put them back (see core.resolve_restored_mods)."""
@@ -400,12 +427,19 @@ class Api:
     def prepare_files(self, paths):
         return self._pack_call(self._pack_services().prepare, paths)
 
+    def prepare_clipboard_files(self):
+        def prepare():
+            from clipboard_import import copied_files
+            paths = copied_files()
+            return self._pack_services().prepare(paths) if paths else None
+        return self._pack_call(prepare)
+
     def link_mod(self, url, source_post=None, update_id=None):
         def resolve():
             if core.is_post_link(url):
                 if core.POST_HELPER:
                     return dict(core.post_files(url), kind="choose")
-                return {"kind": "post", "job": self._post_importer.begin(url)}
+                return {"kind": "post", "job": self._post_importer.begin(url, update_id=update_id)}
             return dict(self._pack_services().download([url], source_post, update_id), kind="pack")
         return self._pack_call(resolve)
 
@@ -418,10 +452,10 @@ class Api:
     def cancel_plan(self, token):
         self._pack_services().forget(token)
 
-    def post_link_status(self, job):
+    def post_link_status(self, job, update_id=None):
         """Attachment discovery in the existing Discord window; no account token is read."""
-        result = self._post_importer.status(job)
-        if result.get("status") == "ready" and self._window:
+        result = self._automatic_posts().status(job) or self._post_importer.status(job)
+        if result.get("status") in {"ready", "downloaded"} and getattr(self, "_window", None):
             try:
                 self._window.restore()
                 self._window.on_top = True
@@ -430,8 +464,26 @@ class Api:
                 pass
         return result
 
+    def select_post_attachments(self, job, indices, update_id=None):
+        return self._pack_call(self._automatic_posts().start, job, indices, update_id)
+
     def cancel_post_link(self, job):
+        self._automatic_posts().cancel(job)
         self._post_importer.cancel(job)
+        self._pack_services().cancel_preview(job)
+
+    def pick_preview_download(self, job, update_id=None):
+        import webview
+        post = self._post_importer.status(job)
+        if not post.get("previews"):
+            return {"error": "Open the Discord post again before choosing its preview file."}
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True,
+            file_types=("Mods and assets (*.gsc;*.lua;*.txt;*.json;*.csv;*.tsv;*.cfg;*.ini;*.xml;*.csc;*.ents;*.mapents;*.zip;*.7z;*.rar)",))
+        if not paths:
+            return None
+        if self._automatic_posts().status(job):
+            return self._pack_call(self._automatic_posts().manual, job, list(paths))
+        return self._pack_call(self._pack_services().prepare_preview, list(paths), post, update_id)
 
     def forget_link(self, path):
         core.forget_download(path)
@@ -518,7 +570,7 @@ class Api:
 
     def pick_pack(self):
         import webview
-        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.gsc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
         return self.prepare_files(list(paths)) if paths else None
 
     def _describe_pack(self, path, asset_folder=None):
@@ -931,6 +983,7 @@ def main():
         background_color="#0f1115",
     )
     window.events.shown += set_window_icon
+    window.events.closed += api._automatic_posts().close
     window.events.closed += api._post_importer.close
     window.events.closed += api._pack_services().close
     api._window = window  # private: pywebview would otherwise crawl the whole window object

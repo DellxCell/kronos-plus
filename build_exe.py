@@ -16,12 +16,14 @@ import tempfile
 import PyInstaller.__main__
 
 from kronos_qol import APP_VERSION as VER  # the one place the version is set
+from fetch_archive_tool import ensure_archive_tool
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VERSION = tuple(int(n) for n in (VER.split(".") + ["0"] * 4)[:4])
 NAME = "Kronos Plus"
 CONSOLE = "--console" in sys.argv
 DIST = os.path.join(HERE, "dist-console" if CONSOLE else "dist")
+ARCHIVE_TOOL = ensure_archive_tool()
 
 version_info = f"""VSVersionInfo(
   ffi=FixedFileInfo(filevers={VERSION}, prodvers={VERSION}),
@@ -52,6 +54,7 @@ try:
         "--version-file", os.path.join(work, "version.txt"),
         "--add-data", f"{os.path.join(HERE, 'ui')};ui",
         "--add-data", f"{os.path.join(HERE, 'kronos_plus.ico')};.",
+        "--add-data", f"{ARCHIVE_TOOL};vendor/7zip",
         "--distpath", DIST,
         "--workpath", os.path.join(work, "build"),
         "--specpath", work,

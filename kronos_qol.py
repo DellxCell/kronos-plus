@@ -522,7 +522,23 @@ def find_conflicts():
             found.add(f'dvar "{dvar}"')
         for what in found:
             writers.setdefault(what, []).append(name)
-    return sorted((w, m) for w, m in writers.items() if len(m) > 1)
+    conflicts = []
+    for what, mods in writers.items():
+        # mp_ mods only run in multiplayer and zm_ mods only in zombies, so they never meet.
+        clash = set()
+        for mode in ("mp", "zm"):
+            group = [m for m in mods if _mode(m) in (mode, None)]
+            if len(group) > 1:
+                clash.update(group)
+        if clash:
+            conflicts.append((what, [m for m in mods if m in clash]))
+    return sorted(conflicts)
+
+
+def _mode(name):
+    """'mp' or 'zm' for mods Kronos only loads in that mode, None for mods that load in both."""
+    prefix = name.lower().split("_", 1)[0]
+    return prefix if prefix in ("mp", "zm") else None
 
 
 # ---------------------------------------------------------------- templates
@@ -1094,7 +1110,7 @@ DOWNLOAD_PREFIX = "kronos-plus-dl-"
 
 
 def download_mod_link(url):
-    """Download a .gsc mod or .zip pack from a Discord file link into a temp folder; returns its path.
+    """Download a source mod, asset or supported archive into an owned temp folder.
 
     Raises ValueError with a message for the user. Nothing is installed here: the caller
     runs the same safety checks as for files picked from disk.
@@ -1104,11 +1120,8 @@ def download_mod_link(url):
             or parts.port not in (None, 443) or not parts.path.startswith("/attachments/")):
         raise ValueError("Paste a Discord file link: right-click the file in Discord and choose Copy Link.")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", os.path.basename(urllib.parse.unquote(parts.path)))
-    if name.lower().endswith((".rar", ".7z")):
-        raise ValueError(f"{name} is a .rar/.7z archive, which Kronos Plus can't open. Extract it yourself and use "
-                         "Add .gsc mods, or ask the author for a .zip.")
-    if os.path.splitext(name)[1].lower() not in ({".gsc", ".zip"} | content.ASSET_EXTENSIONS):
-        raise ValueError(f"{name or 'That link'} isn't a supported mod, asset or ZIP archive.")
+    if os.path.splitext(name)[1].lower() not in ({".gsc"} | content.ARCHIVE_EXTENSIONS | content.ASSET_EXTENSIONS):
+        raise ValueError(f"{name or 'That link'} isn't a supported mod, asset or ZIP/7z/RAR archive.")
     request = urllib.request.Request(parts.geturl(), headers={"User-Agent": "KronosPlus"})
     try:
         with urllib.request.urlopen(request, timeout=30) as r:
@@ -1188,7 +1201,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "1.6"  # releases are numbered 1.2, 1.3, ...
+APP_VERSION = "2.0"  # Release sequence: 1.8, 1.9, 2.0, 2.1, ...
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")

@@ -4,7 +4,7 @@
 
 A companion app for **Kronos**, the offline BO7 Zombies mod. Manage, fix and make mods from one window.
 
-It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. It only goes online to install mods and assets from Discord, and to ask GitHub if there's a new version. It never asks for your Discord login: it reads the post you open in your own Discord app.
+It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. It only goes online to install mods and assets from Discord, and to ask GitHub if there's a new version. It never asks for your Discord login: it reads the post you open in your own Discord app, and for code previews it clicks that preview's Download button there for you.
 
 ## Download
 
@@ -21,11 +21,11 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 **For players**
 - Mod manager: turn mods on/off, save presets, undo any change
 - Rename mods: right-click a mod (or press F2) to show it under a name you pick; the file stays the same
-- Install from Discord: paste a #mods or #assets post link (or a file link) and it finds the files for you (safety-checked first)
+- Install from Discord: paste a #mods or #assets post link (or a file link), pick the attachments you want and it downloads them, code previews included (safety-checked first)
 - Assets: browse Kronos's images, Lua and other assets with previews, add new ones, delete what you don't want
 - Packs: every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post
 - Profiles: save your whole setup, mods and packs, and switch in one click
-- Add mods & packs: drop in .gsc files, assets or a whole .zip pack
+- Add mods & packs: drop in or Ctrl+V .gsc files, assets or a whole .zip, .7z or .rar pack; it works out what's a mod and what's an asset
 - Check before you play: every mod is compiled and checked before the game opens
 - Safe mode: all mods off in one click, back on when you're done
 - Find the crashing mod: a guided search that narrows it down for you
@@ -58,4 +58,6 @@ python app.py
 
 Build the release zip yourself with `python build_exe.py` (output in `dist/`).
 
-`vendor/comtypes` is a copy of [comtypes](https://github.com/enthought/comtypes) 1.4.17 (MIT, see `vendor/comtypes-LICENSE.txt`) with its Windows UI Automation bindings already generated, used to read the Discord post you have open.
+`vendor/comtypes` is a copy of [comtypes](https://github.com/enthought/comtypes) 1.4.17 (MIT, see `vendor/comtypes-LICENSE.txt`) with its Windows UI Automation bindings already generated, used to read the Discord post you have open and click a code preview's Download button.
+
+At build time `fetch_archive_tool.py` downloads the official [7-Zip](https://www.7-zip.org) 26.05 (LGPL, see its `License.txt`), checks it against pinned SHA-256 hashes and bundles `7z.exe`/`7z.dll` to read .7z and .rar packs.

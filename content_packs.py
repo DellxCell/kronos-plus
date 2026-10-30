@@ -12,6 +12,8 @@ import tempfile
 import uuid
 import zipfile
 
+from pack_archives import ARCHIVE_EXTENSIONS, open_archive
+
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".dds", ".tga", ".bmp", ".webp"}
 ASSET_RULES = {
     "Lua": {".lua"},
@@ -142,14 +144,14 @@ def validate_asset(relative, data):
 def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_info, asset_folder=None):
     name = os.path.splitext(os.path.basename(path))[0]
     archive_label = name
-    if not path.lower().endswith(".zip"):
+    if os.path.splitext(path)[1].lower() not in ARCHIVE_EXTENSIONS:
         target = asset_target(os.path.basename(path), asset_folder)
         with open(path, "rb") as file:
             data = file.read(MAX_ASSET_BYTES + 1)
         validate_asset(target, data)
         return name, {target: data}, []
     good, bad, seen, total = {}, [], set(), 0
-    with zipfile.ZipFile(path) as archive:
+    with open_archive(path, MAX_ARCHIVE_FILES, MAX_EXPANDED_BYTES) as archive:
         entries = archive.infolist()
         if len(entries) > MAX_ARCHIVE_FILES:
             raise ValueError("Archive has too many files")

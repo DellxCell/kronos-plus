@@ -1,9 +1,8 @@
 """Read attachment links from a requested Kronos post in the user's Discord window.
 
 The reader uses Windows accessibility, not Discord credentials or private APIs.
-It never clicks, types, sends messages, or changes the clipboard. Run the Windows
-reader in a short-lived child process so a stalled accessibility provider cannot
-hold the app's UI thread.
+The reader does not type, send messages, or change the clipboard. A separate
+bounded helper can invoke Download on an explicitly selected preview attachment.
 """
 
 from __future__ import annotations
@@ -99,6 +98,15 @@ def attachment(url: str, label: str = "", allow_images=True) -> dict | None:
         return None
 
 
+def preview_name(name):
+    """A filename from a plaintext attachment control, never a message's prose."""
+    if (not isinstance(name, str) or not name or len(name) > 240 or name in {".", ".."}
+            or any(char in name for char in '/\\:<>"|?*') or any(ord(char) < 32 for char in name)
+            or name[-1] in " ." or re.match(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", name, re.I)):
+        return None
+    return name if os.path.splitext(name)[1].lower() in FILE_EXTENSIONS - IMAGE_EXTENSIONS else None
+
+
 def select_snapshot(target: PostLink, snapshot: dict) -> dict:
     """Validate the reader result again in the parent process."""
     if not isinstance(snapshot, dict):
@@ -119,7 +127,7 @@ def select_snapshot(target: PostLink, snapshot: dict) -> dict:
                 and (not target.message or message["message_id"] == target.message)]
     if not selected:
         return {"status": "waiting", "message": "Waiting for the post's messages to appear in Discord…"}
-    files, seen = [], set()
+    files, seen, previews, preview_seen = [], set(), [], set()
     for message in selected:
         candidates = message.get("links", [])
         if not isinstance(candidates, list):
@@ -131,11 +139,22 @@ def select_snapshot(target: PostLink, snapshot: dict) -> dict:
                 if key not in seen:
                     seen.add(key)
                     files.append(item)
+        candidates = message.get("previews", [])
+        if isinstance(candidates, list):
+            for candidate in candidates[:20]:
+                name = preview_name(candidate.get("name")) if isinstance(candidate, dict) else None
+                if name and name.casefold() not in preview_seen:
+                    preview_seen.add(name.casefold())
+                    previews.append({"name": name, "message_id": message["message_id"]})
+    post_url = PostLink(active.guild, active.forum, active.thread, target.message).url
+    if previews and not files:
+        return {"status": "preview", "previews": previews, "post_url": post_url,
+                "message": "Preparing the code-preview attachment for automatic download…"}
     if not files:
         return {"status": "empty", "waiting": target.message is None,
                 "message": "No mod or asset attachment is loaded yet. Scroll through this post's replies in Discord to show its files."}
     return {"status": "ready", "title": "Kronos mod post", "author": "", "files": files,
-            "post_url": PostLink(active.guild, active.forum, active.thread, target.message).url}
+            "previews": previews, "post_url": post_url}
 
 
 def _discord_windows():
@@ -284,7 +303,17 @@ def read_snapshot(target: PostLink) -> dict:
                     item = attachment(value(links.GetElement(i)), allow_images=active.forum == ASSETS_FORUM_ID)
                     if item:
                         files.append(item)
-                result.append({"thread_id": match[1], "message_id": match[2], "links": files})
+                previews = []
+                controls = message.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                    U.UIA_NamePropertyId, "Plaintext file preview controls"))
+                for control_index in range(min(controls.Length, 20)):
+                    texts = controls.GetElement(control_index).FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                        U.UIA_ControlTypePropertyId, U.UIA_TextControlTypeId))
+                    for text_index in range(min(texts.Length, 100)):
+                        name = preview_name(texts.GetElement(text_index).GetCurrentPropertyValue(U.UIA_NamePropertyId))
+                        if name:
+                            previews.append({"name": name})
+                result.append({"thread_id": match[1], "message_id": match[2], "links": files, "previews": previews})
             return {"url": url, "messages": result}
         except Exception:
             continue
@@ -311,20 +340,22 @@ def helper_main(url, output):
 
 
 class DesktopPostImporter:
-    def __init__(self, opener, entry, timeout=120, runner=None):
+    def __init__(self, opener, entry, timeout=120, runner=None, on_discovered=None):
         self._opener, self._entry, self._timeout = opener, entry, timeout
         self._runner = runner or self._capture
         self._lock = threading.RLock()
         self._jobs = {}
+        self._on_discovered = on_discovered
 
-    def begin(self, url):
+    def begin(self, url, update_id=None):
         target = parse_post_link(url)
         if not target or target.guild != GUILD_ID:
             raise ValueError("Copy a post link from the Kronos #mods or #assets forum.")
         self.close()
-        job = {"cancel": threading.Event(), "process": None,
+        job = {"cancel": threading.Event(), "process": None, "target": target,
                "result": {"status": "waiting", "message": "Opening the post in your existing Discord window…"}}
         key = uuid.uuid4().hex
+        job["key"], job["update_id"] = key, update_id
         with self._lock:
             self._jobs[key] = job
         try:
@@ -336,10 +367,31 @@ class DesktopPostImporter:
         return key
 
     def _capture(self, target, job):
+        return self._run_helper(["--read-discord-post", target.url], job)
+
+    def download_preview(self, key, preview):
+        with self._lock:
+            job = self._jobs.get(key)
+            if not job or job["cancel"].is_set() or preview not in job["result"].get("previews", []):
+                raise ValueError("The Discord attachment selection has expired.")
+            original = job["target"]
+            current = parse_post_link(job["result"].get("post_url", ""))
+            if (not current or current.guild != GUILD_ID or current.forum not in FORUM_IDS or not current.thread
+                    or (original.forum and original.forum != current.forum)
+                    or (original.thread and original.thread != current.thread)
+                    or (original.message and original.message != preview["message_id"])):
+                raise ValueError("The selected Discord post has changed. Open it again.")
+            target = PostLink(current.guild, current.forum, current.thread, preview["message_id"])
+        # A forum link may have no thread ID, and Discord can remember a scrolled
+        # position. Bring the selected attachment's exact message into view first.
+        self._opener(f"{target.guild}/{target.thread}/{preview['message_id']}")
+        return self._run_helper(["--download-discord-preview", target.url, preview["message_id"], preview["name"]], job)
+
+    def _run_helper(self, arguments, job):
         folder = tempfile.mkdtemp(prefix="kp-discord-")
         output = os.path.join(folder, "snapshot.json")
         command = ([sys.executable] if getattr(sys, "frozen", False) else [sys.executable, self._entry])
-        command += ["--read-discord-post", target.url, output]
+        command += [*arguments, output]
         process = None
         try:
             with self._lock:
@@ -383,7 +435,10 @@ class DesktopPostImporter:
                     result = select_snapshot(target, snapshot)
                 with self._lock:
                     job["result"] = result
-                if result["status"] in {"ready", "error"} or (result["status"] == "empty" and not result.get("waiting")):
+                if (self._on_discovered and result["status"] in {"ready", "preview"}
+                        and not job["cancel"].is_set()):
+                    self._on_discovered(job["key"], job["update_id"])
+                if result["status"] in {"ready", "error", "preview"} or (result["status"] == "empty" and not result.get("waiting")):
                     return
             except Exception:
                 with self._lock:
