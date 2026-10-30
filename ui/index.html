@@ -690,7 +690,7 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
     </div>
     <div class="spacer"></div>
     <span class="chip"><span class="dot" id="live-dot"></span><span id="live-text">Not playing</span></span>
-    <button class="btn primary play" id="play-btn" title="Opens Kronos's launcher. Click Play there to start the game"><svg><use href="#i-play"/></svg>Open launcher</button>
+    <button class="btn primary play" id="play-btn" title="Start the game through Kronos"><svg><use href="#i-play"/></svg>Play</button>
   </header>
   <div id="banners"></div>
 
@@ -1514,23 +1514,34 @@ $("#health-run").onclick = loadHealth;
 $("#handled-btn").onclick = async () => { await api.mark_update_handled(); toast("Update marked as handled", "ok"); loadHealth(); refresh(); };
 
 // ---------------------------------------------------------- play + theme + sessions
-// Kronos Plus opens Kronos's launcher; the game itself starts from the launcher's own Play button.
-async function openLauncher() {
-  try { return await api.launch(); } catch (e) { return { error: "Couldn't start the Kronos launcher." }; }
+// Start through Kronos's own Play control, then confirm the game appears.
+async function startKronosGame() {
+  try { return await api.launch(); } catch (e) { return { error: "Couldn't start the game through Kronos." }; }
 }
-function launchToast(r, opened = "Kronos launcher opened. Click Play there to start the game") {
+function launchToast(r, started = "Kronos is starting") {
   if (r.error) return toast(r.error, "bad");
-  toast({ playing: "The game is already running", shown: "The Kronos launcher is already open. Click Play there to start the game" }[r.status] || opened,
-    r.status === "playing" ? "info" : "ok");
+  toast({ playing: "The game is already running", starting: "Kronos is already starting", started }[r.status] || started,
+    r.status === "started" ? "ok" : "info");
 }
 $("#play-btn").onclick = async () => {
+  const button = $("#play-btn");
+  if (button.disabled) return;
+  button.disabled = true;
   modal(`<h2>Getting ready…</h2><div class="body row"><span class="spin"></span>Checking your setup and mods</div>`);
-  const problems = await api.prelaunch();
-  const launch = async () => { const r = await openLauncher(); closeModal(); launchToast(r); };
-  if (!problems.length) return launch();
-  modal(`<h2>Before you play</h2><div class="body">Found ${problems.length} thing${problems.length > 1 ? "s" : ""} to check:<ul>${problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
-    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Open anyway</button></div>`);
-  $("#play-anyway").onclick = launch;
+  const launch = async () => {
+    button.disabled = true;
+    modal(`<h2>Starting Kronos…</h2><div class="body row"><span class="spin"></span>Waiting for the game to start</div>`);
+    try { const r = await startKronosGame(); closeModal(); launchToast(r); }
+    finally { button.disabled = false; }
+  };
+  try {
+    const problems = await api.prelaunch();
+    if (!problems.length) return await launch();
+    modal(`<h2>Before you play</h2><div class="body">Found ${problems.length} thing${problems.length > 1 ? "s" : ""} to check:<ul>${problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
+      <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Play anyway</button></div>`);
+    $("#play-anyway").onclick = launch;
+  } catch (e) { closeModal(); toast("Couldn't finish the prelaunch checks. Try Play again.", "bad"); }
+  finally { button.disabled = false; }
 };
 $("#theme-btn").onclick = async () => { await api.set_theme(!S.ov.dark); refresh(); };
 
@@ -1678,9 +1689,9 @@ async function testAlone(name) {
   const go = async () => {
     const err = await api.test_alone(name);
     if (err) { closeModal(); return toast(err, "bad"); }
-    const r = await openLauncher();
+    const r = await startKronosGame();
     closeModal();
-    launchToast(r, `Testing ${name} alone. Click Play in the Kronos launcher`);
+    launchToast(r, `Testing ${name} alone`);
     refresh(); loadStudio();
   };
   if (!errors.length) return go();
