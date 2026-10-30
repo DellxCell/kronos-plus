@@ -370,11 +370,239 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); padding: 6px;
 }
 .menu-pop.show { display: block; }
+#mod-menu { position: fixed; right: auto; top: 0; min-width: 0; }
 .menu-pop button { display: flex; gap: 10px; align-items: center; width: 100%; padding: 9px 10px; border: 0; background: none; border-radius: 8px; cursor: pointer; text-align: left; }
 .menu-pop button:hover { background: var(--panel); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- look: depth, glow and colour on top of the base styles above */
+:root {
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012));
+  --glass-line: rgba(255, 255, 255, .07);
+  --glass-line-2: rgba(255, 255, 255, .13);
+  --lift: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 2px 6px rgba(0, 0, 0, .28);
+  --lift-2: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 12px 28px rgba(0, 0, 0, .38);
+  --ember-glow: 0 0 0 1px rgba(255, 122, 47, .55), 0 10px 30px rgba(255, 122, 47, .18);
+  --page-glow: radial-gradient(900px 520px at 88% -12%, rgba(255, 122, 47, .2), transparent 62%),
+               radial-gradient(700px 460px at 30% 115%, rgba(106, 168, 255, .09), transparent 60%);
+}
+:root[data-theme="light"] {
+  --glass: linear-gradient(180deg, #ffffff, #fbfbfd);
+  --glass-line: rgba(20, 24, 40, .08);
+  --glass-line-2: rgba(20, 24, 40, .16);
+  --lift: 0 1px 2px rgba(20, 24, 40, .06);
+  --lift-2: 0 10px 26px rgba(20, 24, 40, .12);
+  --ember-glow: 0 0 0 1px rgba(255, 122, 47, .6), 0 10px 26px rgba(255, 122, 47, .16);
+  --page-glow: radial-gradient(900px 520px at 88% -12%, rgba(255, 122, 47, .10), transparent 62%),
+               radial-gradient(700px 460px at 30% 115%, rgba(106, 168, 255, .08), transparent 60%);
+}
+main { background: var(--page-glow); }
+
+/* sidebar */
+aside { background: linear-gradient(180deg, rgba(255, 122, 47, .05), transparent 220px), var(--bg-2); border-right-color: var(--glass-line); }
+.brand { padding-bottom: 24px; }
+.brand b { font-size: 16px; font-weight: 700; letter-spacing: .1px; }
+.logo { width: 40px; height: 40px; filter: drop-shadow(0 6px 16px rgba(255, 122, 47, .5)); }
+.nav { font-weight: 500; }
+.nav.active {
+  background: linear-gradient(90deg, rgba(255, 122, 47, .2), rgba(255, 122, 47, .04));
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 47, .22);
+}
+.nav.active .count { background: rgba(255, 122, 47, .2); color: var(--ember-2); }
+:root[data-theme="light"] .nav.active .count { color: #c2410c; }
+.side-foot { border-top-color: var(--glass-line); }
+
+/* header */
+header { padding-top: 24px; }
+header h1 { font-size: 26px; font-weight: 700; letter-spacing: -.5px; }
+header h1::after {
+  content: ""; display: block; width: 34px; height: 3px; margin-top: 7px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--ember-2), var(--ember));
+}
+.chip { background: var(--glass), var(--panel); border-color: var(--glass-line); }
+.btn.play { box-shadow: 0 8px 26px rgba(255, 122, 47, .4), inset 0 1px 0 rgba(255, 255, 255, .35); position: relative; overflow: hidden; }
+.btn.play::before {
+  content: ""; position: absolute; inset: 0; transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .45) 50%, transparent 70%);
+  transition: transform .6s ease;
+}
+.btn.play:hover::before { transform: translateX(120%); }
+
+/* controls */
+.btn { background: var(--glass), var(--panel); border-color: var(--glass-line-2); box-shadow: var(--lift); }
+.btn:hover { border-color: rgba(255, 122, 47, .45); background: var(--glass), var(--panel-2); }
+.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; }
+.btn.primary { box-shadow: 0 6px 20px rgba(255, 122, 47, .32), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.input, .seg { background: var(--glass), var(--panel); border-color: var(--glass-line-2); }
+.seg button.on { background: linear-gradient(135deg, rgba(255, 179, 71, .22), rgba(255, 122, 47, .18)); color: var(--text); box-shadow: inset 0 0 0 1px rgba(255, 122, 47, .3); }
+.switch span { background: var(--line-2); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35); }
+.switch input:checked + span { background: linear-gradient(135deg, var(--ember-2), var(--ember)); box-shadow: 0 0 14px rgba(255, 122, 47, .45); }
+.preset { background: var(--glass), var(--panel); border-color: var(--glass-line-2); }
+
+/* cards */
+.card, .stat, .log-file, .proj { background: var(--glass), var(--panel); border-color: var(--glass-line); box-shadow: var(--lift); }
+.card { border-radius: 16px; }
+.card h3 svg { filter: drop-shadow(0 0 8px rgba(255, 122, 47, .5)); }
+.stat b {
+  font-size: 32px; font-weight: 700;
+  background: linear-gradient(135deg, var(--ember-2), var(--ember)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* mod list */
+.mod-list { gap: 10px; }
+.mod {
+  background: var(--glass), var(--panel); border-color: var(--glass-line); box-shadow: var(--lift);
+  transition: border-color .15s, box-shadow .2s, transform .15s;
+}
+.mod:hover { border-color: var(--glass-line-2); box-shadow: var(--lift-2); transform: translateY(-1px); }
+.mod.sel { border-color: transparent; box-shadow: var(--ember-glow); background: linear-gradient(90deg, rgba(255, 122, 47, .14), transparent 70%), var(--panel); }
+.mod-icon { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--glass-line-2); background: linear-gradient(135deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)); }
+.mod-icon.zm { background: linear-gradient(135deg, rgba(60, 207, 127, .32), rgba(60, 207, 127, .07)); border-color: rgba(60, 207, 127, .3); box-shadow: 0 4px 14px rgba(60, 207, 127, .14); }
+.mod-icon.mp { background: linear-gradient(135deg, rgba(106, 168, 255, .32), rgba(106, 168, 255, .07)); border-color: rgba(106, 168, 255, .3); box-shadow: 0 4px 14px rgba(106, 168, 255, .14); }
+.mod-icon.pr { background: linear-gradient(135deg, rgba(245, 185, 66, .32), rgba(245, 185, 66, .07)); border-color: rgba(245, 185, 66, .3); box-shadow: 0 4px 14px rgba(245, 185, 66, .14); }
+.mod-name { font-size: 14.5px; }
+/* a coloured edge per mod type: zombies green, multiplayer blue, prepared amber */
+.mod { position: relative; overflow: hidden; }
+.mod::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--text-3); opacity: .5; }
+.mod:has(.mod-icon.zm)::before { background: var(--ok); opacity: .9; box-shadow: 0 0 10px var(--ok); }
+.mod:has(.mod-icon.mp)::before { background: var(--info); opacity: .9; box-shadow: 0 0 10px var(--info); }
+.mod:has(.mod-icon.pr)::before { background: var(--warn); opacity: .9; box-shadow: 0 0 10px var(--warn); }
+.mod.sel::before { background: var(--ember); box-shadow: 0 0 12px var(--ember); opacity: 1; }
+.mod.off::before { opacity: .2; box-shadow: none; }
+.mod.off { background: var(--panel); box-shadow: none; }
+.mod.off .mod-icon { filter: grayscale(1); opacity: .5; box-shadow: none; }
+.mod.off .mod-desc { opacity: .7; }
+
+/* code */
+.detail h3 { font-size: 17px; font-weight: 700; }
+.code, .editor, .console { background: rgba(0, 0, 0, .28); border-color: var(--glass-line); box-shadow: inset 0 2px 10px rgba(0, 0, 0, .25); }
+:root[data-theme="light"] .code, :root[data-theme="light"] .editor, :root[data-theme="light"] .console { background: #fbfbfd; box-shadow: inset 0 1px 4px rgba(20, 24, 40, .06); }
+
+/* banners, popups */
+.banner { border: 1px solid currentColor; border-color: color-mix(in srgb, currentColor 25%, transparent); }
+.modal, .menu-pop, .toast { background: var(--glass), var(--panel-2); border-color: var(--glass-line-2); box-shadow: var(--lift-2); }
+.modal { border-radius: 20px; }
+
+/* right-click menu on a mod */
+:root { --hover: rgba(255, 255, 255, .06); }
+:root[data-theme="light"] { --hover: rgba(20, 24, 40, .05); }
+#mod-menu { width: 250px; padding: 6px; border-radius: 14px; backdrop-filter: blur(16px); transform-origin: top left; }
+#mod-menu.show { animation: pop .14s ease-out; }
+@keyframes pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+.ctx-head { display: flex; gap: 11px; align-items: center; padding: 8px 8px 11px; margin-bottom: 4px; border-bottom: 1px solid var(--glass-line); }
+.ctx-head .mod-icon { width: 36px; height: 36px; border-radius: 10px; font-size: 11px; }
+.ctx-head div:last-child { min-width: 0; }
+.ctx-head b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-head small { display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
+.ctx-head small i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+.ctx-head small i.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+#mod-menu button { font-size: 13.5px; padding: 8px 10px; color: var(--text-2); transition: background .12s, color .12s; }
+#mod-menu button svg { width: 16px; height: 16px; color: var(--text-3); transition: color .12s; }
+#mod-menu button:hover { background: var(--hover); color: var(--text); }
+#mod-menu button:hover svg { color: var(--ember); }
+.ctx-sep { height: 1px; background: var(--glass-line); margin: 4px 6px; }
+#mod-menu .ctx-danger, #mod-menu .ctx-danger svg { color: var(--bad); }
+#mod-menu .ctx-danger:hover { background: var(--bad-soft); color: var(--bad); }
+#mod-menu .ctx-danger:hover svg { color: var(--bad); }
+kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 1px 6px; border: 1px solid var(--glass-line-2); border-radius: 5px; }
+/* delete confirmation */
+.btn.danger-solid {
+  border: 0; color: #fff; font-weight: 600; background: linear-gradient(135deg, #ff7a7a, #e5484d);
+  box-shadow: 0 6px 18px rgba(229, 72, 77, .3), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.btn.danger-solid:hover { filter: brightness(1.06); background: linear-gradient(135deg, #ff7a7a, #e5484d); }
+.del-head { display: flex; gap: 14px; align-items: center; }
+.del-badge { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; flex: none; background: var(--bad-soft); color: var(--bad); border: 1px solid rgba(255, 93, 93, .3); }
+.del-badge svg { width: 22px; height: 22px; }
+.del-head h2 { margin: 0 0 6px; }
+
+/* assets */
+:root { --checker: repeating-conic-gradient(rgba(255, 255, 255, .045) 0 25%, transparent 0 50%) 50% / 14px 14px, rgba(0, 0, 0, .22); }
+/* Game icons are mostly white, so previews stay on a dark backdrop in light mode too. */
+:root[data-theme="light"] { --checker: repeating-conic-gradient(rgba(255, 255, 255, .05) 0 25%, transparent 0 50%) 50% / 14px 14px, #2b2f3a; }
+.as-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.as-chip {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 99px; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-2); background: var(--glass), var(--panel); border: 1px solid var(--glass-line-2);
+  transition: border-color .12s, color .12s, box-shadow .12s;
+}
+.as-chip:hover { color: var(--text); border-color: var(--ember); }
+.as-chip span { font-size: 11.5px; color: var(--text-3); background: var(--hover); padding: 1px 7px; border-radius: 99px; }
+.as-chip.on { color: var(--text); border-color: transparent; box-shadow: inset 0 0 0 1px rgba(255, 122, 47, .45); background: linear-gradient(135deg, rgba(255, 179, 71, .2), rgba(255, 122, 47, .14)), var(--panel); }
+.as-chip.on span { color: var(--ember); }
+.as-chip input { display: none; }
+.assets-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.assets-layout > * { min-width: 0; }
+.as-group-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.as-group-tools > span { flex: 1; color: var(--text-3); font-size: 12.5px; }
+.as-group { border: 1px solid var(--glass-line); border-radius: 14px; background: var(--glass), var(--panel); box-shadow: var(--lift); overflow: hidden; }
+.as-group + .as-group { margin-top: 10px; }
+.as-group > summary { display: flex; gap: 12px; align-items: center; padding: 15px 14px; cursor: pointer; list-style: none; }
+.as-group > summary::-webkit-details-marker { display: none; }
+.as-group > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--text-3); border-bottom: 2px solid var(--text-3); transform: rotate(-45deg); flex: none; transition: transform .12s; }
+.as-group[open] > summary::before { transform: rotate(45deg); }
+.as-group > summary:hover { background: var(--hover); }
+.as-group > summary:focus-visible { outline: 2px solid var(--ember); outline-offset: -3px; border-radius: 12px; }
+.as-group > summary > svg { width: 25px; height: 25px; color: var(--ember); flex: none; }
+.as-group-title { flex: 1; min-width: 0; }
+.as-group-title b { display: block; font-size: 13.5px; font-weight: 600; }
+.as-group-title small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--text-3); overflow-wrap: anywhere; }
+.as-group-count { font-size: 12px; white-space: nowrap; color: var(--text-2); background: var(--hover); border-radius: 99px; padding: 4px 9px; }
+.as-group > .as-grid { padding: 2px 12px 12px; }
+.as-group[open] > summary { margin-bottom: 6px; border-bottom: 1px solid var(--glass-line); }
+.as-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.asset {
+  position: relative; padding: 7px 7px 8px; border-radius: 14px; cursor: pointer; background: var(--glass), var(--panel);
+  border: 1px solid var(--glass-line); box-shadow: var(--lift); transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.asset:hover { transform: translateY(-1px); border-color: var(--glass-line-2); box-shadow: var(--lift-2); }
+.asset.sel { border-color: transparent; box-shadow: var(--ember-glow); }
+.thumb { aspect-ratio: 1; border-radius: 10px; display: grid; place-items: center; overflow: hidden; background: var(--checker); }
+.thumb img { max-width: 78%; max-height: 78%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
+.thumb .ext { font: 700 12px var(--mono); letter-spacing: .5px; padding: 6px 9px; border-radius: 9px; color: var(--text-2); background: var(--hover); border: 1px solid var(--glass-line-2); }
+.thumb .ext.lua { color: var(--info); background: var(--info-soft); border-color: rgba(106, 168, 255, .3); }
+.thumb .ext.img { color: var(--ember); background: var(--ember-soft); border-color: rgba(255, 122, 47, .3); }
+.thumb .ext.data { color: var(--ok); background: var(--ok-soft); border-color: rgba(60, 207, 127, .3); }
+.asset .nm { margin-top: 7px; font-size: 12px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.asset.sel .nm { color: var(--text); }
+.asset .yours { position: absolute; top: 11px; right: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 8px var(--ember); }
+#asset-detail { overflow: auto; }
+.as-big { aspect-ratio: 16 / 10; border-radius: 12px; display: grid; place-items: center; overflow: hidden; background: var(--checker); border: 1px solid var(--glass-line); margin-bottom: 14px; }
+.as-big img { max-width: 86%; max-height: 86%; object-fit: contain; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .4)); }
+.as-big .ext { font-size: 15px; padding: 10px 14px; }
+.as-big .muted { font-size: 12.5px; margin-top: 8px; }
+#asset-detail .code { max-height: 300px; min-height: 120px; margin: 0 0 14px; font-size: 12px; }
+#asset-detail .pill { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px 0 14px; }
+.as-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.as-meta div { padding: 9px 11px; border-radius: 10px; background: var(--hover); border: 1px solid var(--glass-line); min-width: 0; }
+.as-meta span { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 2px; }
+.as-meta b { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-head .as-mini { background: var(--checker); overflow: hidden; }
+.ctx-head .as-mini img { max-width: 80%; max-height: 80%; }
+.ctx-head .as-mini .ext { padding: 0; border: 0; background: none; font-size: 10px; }
+.warn-box { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13px; margin-top: 10px; }
+.warn-box svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+/* managed packs */
+#pack-list { display: grid; gap: 14px; }
+.pk-card h3 { display: flex; align-items: center; gap: 10px; flex: 1; margin: 0; overflow-wrap: anywhere; }
+.pk-card h3 svg { width: 21px; height: 21px; flex: none; color: var(--ember); }
+.pk-actions { flex-wrap: wrap; gap: 8px; }
+.pk-profile-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; padding: 13px 15px; }
+.pk-profile-row .input { flex: 1; min-width: 210px; }
+.pk-state { border-radius: 99px; padding: 4px 10px; background: var(--hover); font-size: 12px; color: var(--text-3); }
+.pk-state.on { background: var(--ok-soft); color: var(--ok); }
+.pk-conflict { font-size: 12.5px; color: var(--warn); }
+.pk-error { color: var(--bad); font-size: 13px; min-height: 16px; }
+.pk-file-list { max-height: 220px; overflow: auto; border: 1px solid var(--glass-line); border-radius: 10px; margin: 10px 0; font-size: 12.5px; }
+.pk-file-list > div { padding: 8px 11px; overflow-wrap: anywhere; }
+.pk-file-list > div + div { border-top: 1px solid var(--glass-line); }
+.pk-file-list small { display: block; margin-top: 4px; color: var(--text-3); }
+.pk-attachment { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; font-size: 13px; overflow-wrap: anywhere; }
+.pk-attachment input { margin-top: 3px; flex: none; }
+.pk-review-details { margin: 12px 0; }
+.pk-review-details > summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -391,6 +619,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-link"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
@@ -403,7 +633,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
   <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-refresh"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
 </svg>
 
 <aside>
@@ -419,6 +650,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
     <div><b>Kronos Plus</b><span>BO7 Zombies companion</span></div>
   </div>
   <button class="nav active" data-page="mods"><svg><use href="#i-mods"/></svg>Mods<span class="count" id="nav-mods">0</span></button>
+  <button class="nav" data-page="assets"><svg><use href="#i-image"/></svg>Assets<span class="count" id="nav-assets">0</span></button>
+  <button class="nav" data-page="packs"><svg><use href="#i-folder"/></svg>Packs<span class="count" id="nav-packs">0</span></button>
   <button class="nav" data-page="studio" id="nav-studio" style="display:none"><svg><use href="#i-code"/></svg>Studio</button>
   <button class="nav" data-page="console" id="nav-console" style="display:none"><svg><use href="#i-file"/></svg>Console</button>
   <button class="nav" data-page="trouble"><svg><use href="#i-wrench"/></svg>Troubleshoot</button>
@@ -471,6 +704,33 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
       <div class="mods-layout">
         <div class="mod-list" id="mod-list"></div>
         <div class="card detail" id="detail"></div>
+      </div>
+    </section>
+
+    <!-- ================= PACKS ================= -->
+    <section class="page" id="page-packs">
+      <div class="toolbar"><button class="btn" id="pack-add">Install files…</button><button class="btn primary" id="pack-get">Get from Discord</button><div class="spacer" style="flex:1"></div><button class="btn" id="profile-save-current">Save full profile</button></div>
+      <div class="card pk-profile-row"><select class="input" id="full-profile"><option value="">Choose a full profile…</option></select><button class="btn" id="profile-apply">Apply profile</button><button class="btn ghost" id="profile-delete">Delete profile</button></div>
+      <p class="sub">Packs imported here can be disabled, updated or uninstalled together. Full profiles save enabled mods, packs and pack priority.</p>
+      <div id="pack-list"></div>
+    </section>
+
+    <!-- ================= ASSETS ================= -->
+    <section class="page" id="page-assets">
+      <div class="toolbar">
+        <div class="search"><svg><use href="#i-search"/></svg><input class="input" id="as-search" placeholder="Search assets"></div>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn" id="as-folder"><svg><use href="#i-folder"/></svg>Open assets folder</button>
+        <button class="btn" id="as-add"><svg><use href="#i-plus"/></svg>Add from file…</button>
+        <button class="btn primary" id="as-get"><svg><use href="#i-download"/></svg>Get assets</button>
+      </div>
+      <div class="as-chips" id="as-chips"></div>
+      <div class="assets-layout">
+        <div>
+          <div class="as-group-tools"><span id="as-group-count"></span><button class="btn sm" id="as-expand">Expand all</button><button class="btn sm" id="as-collapse">Collapse all</button></div>
+          <div id="asset-list"></div>
+        </div>
+        <div class="card detail" id="asset-detail"></div>
       </div>
     </section>
 
@@ -586,7 +846,9 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div id="toasts"></div>
+<div class="menu-pop" id="mod-menu"></div>
 
+<script src="pack-ui.js"></script>
 <script>
 let api = null;
 const $ = (s, el = document) => el.querySelector(s);
@@ -597,6 +859,8 @@ const S = { ov: null, selected: null, filter: "all", settings: null, dirty: {}, 
 
 const PAGES = {
   mods: ["Mods", "Turn mods on and off. Changes apply the next time the game starts."],
+  assets: ["Assets", "Browse packs and folders. Expand a group to see its files."],
+  packs: ["Packs", "Manage complete packs, conflicts and profiles."],
   studio: ["Studio", "Build mods: lint, manifest, and test one mod on its own."],
   console: ["Console", "Kronos's logs, crashes and match results as they happen."],
   trouble: ["Troubleshoot", "Safe mode, a crash finder and undo for every change."],
@@ -614,12 +878,23 @@ function toast(text, kind = "info") {
   $("#toasts").append(t);
   setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 0; setTimeout(() => t.remove(), 300); }, 3200);
 }
-function modal(html) {
+let pendingPostImport = null;
+function stopPostImport() {
+  const pending = pendingPostImport;
+  pendingPostImport = null;
+  if (pending) {
+    clearInterval(pending.timer);
+    Promise.resolve(api.cancel_post_link(pending.id)).catch(() => {});
+  }
+}
+function modal(html, keepPlan = null) {
+  PackUI.onModal(keepPlan);
+  stopPostImport();
   $("#modal").innerHTML = html;
   $("#overlay").classList.add("show");
   const first = $("#modal input"); if (first) setTimeout(() => first.focus(), 30);
 }
-function closeModal() { $("#overlay").classList.remove("show"); }
+function closeModal() { PackUI.release(); stopPostImport(); $("#overlay").classList.remove("show"); }
 $("#overlay").addEventListener("mousedown", e => { if (e.target.id === "overlay") closeModal(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 function confirmBox(title, body, okText = "OK", danger = false) {
@@ -641,6 +916,13 @@ function highlight(code) {
   }
   return out + esc(code.slice(last));
 }
+async function changeModSet(names, enabled) {
+  try {
+    const result = await api.set_mods(names, enabled);
+    if (result?.error) { toast(result.error, "bad"); refresh(); return false; }
+    return true;
+  } catch (error) { toast("Couldn't change these mods", "bad"); refresh(); return false; }
+}
 const modKind = m => m.prepared ? ["pr", "PR"] : m.name.startsWith("zm_") ? ["zm", "ZM"] : m.name.startsWith("mp_") ? ["mp", "MP"] : ["", "GSC"];
 const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 
@@ -652,7 +934,7 @@ function go(page) {
   $("#page-sub").textContent = PAGES[page][1];
   clearInterval(CON.timer);
   if (page === "console") { pollConsole(); CON.timer = setInterval(pollConsole, 1500); }
-  ({ studio: loadStudio, history: loadSessions, settings: loadSettings, logs: loadLogs, health: loadHealth, trouble: renderTrouble }[page] || (() => {}))();
+  ({ packs: () => PackUI.load(), assets: loadAssets, studio: loadStudio, history: loadSessions, settings: loadSettings, logs: loadLogs, health: loadHealth, trouble: renderTrouble }[page] || (() => {}))();
 }
 $$(".nav").forEach(n => n.onclick = () => go(n.dataset.page));
 
@@ -663,6 +945,10 @@ async function refresh() {
   $("#theme-btn").innerHTML = S.ov.dark ? icon("sun") + "<span>Light mode</span>" : icon("moon") + "<span>Dark mode</span>";
   $("#game-dir").textContent = S.ov.gameDir;
   $("#nav-mods").textContent = `${S.ov.enabledCount}/${S.ov.mods.length}`;
+  $("#nav-assets").textContent = S.ov.assetCount;
+  $("#nav-packs").textContent = S.ov.packCount;
+  if ($("#page-packs.active")) PackUI.load();
+  if ($("#page-assets.active")) loadAssets();
   $("#app-ver").textContent = "Version " + S.ov.appVersion;
   $("#banners").innerHTML = (S.update ? `<div class="banner update">${icon("download")}<span>Kronos Plus <b>${esc(S.update.version)}</b> is out.</span>
     <span style="flex:1"></span><button class="btn sm primary" data-act="update">Update now</button></div>` : "") +
@@ -690,7 +976,7 @@ function renderPresets() {
       }
       return;
     }
-    await api.apply_preset(c.dataset.p); toast(`Applied preset ${c.dataset.p}`, "ok"); refresh();
+    const result = await api.apply_preset(c.dataset.p); if (result?.error) return toast(result.error, "bad"); toast(`Applied preset ${c.dataset.p}`, "ok"); refresh();
   });
   $("#save-preset").onclick = () => {
     modal(`<h2>Save preset</h2><div class="body">Saves the ${S.ov.enabledCount} mods that are on now.</div>
@@ -720,14 +1006,70 @@ function renderMods() {
   }
   $$(".mod", list).forEach(row => {
     row.onclick = e => { if (!e.target.closest(".switch")) { S.selected = row.dataset.n; renderMods(); } };
+    row.oncontextmenu = e => { e.preventDefault(); modMenu(row.dataset.n, e.clientX, e.clientY); };
     $("input", row).onchange = async e => {
-      await api.set_mods([row.dataset.n], e.target.checked);
+      if (!(await changeModSet([row.dataset.n], e.target.checked))) return;
       toast(`${row.dataset.n} turned ${e.target.checked ? "on" : "off"}`, "ok");
       refresh();
     };
   });
   renderDetail();
 }
+
+// Right-click menu on a mod.
+function modMenu(name, x, y) {
+  const m = S.ov.mods.find(x => x.name === name);
+  if (!m) return;
+  const [k, label] = modKind(m);
+  const menu = $("#mod-menu");
+  menu.innerHTML = `<div class="ctx-head"><div class="mod-icon ${k}">${label}</div><div><b>${esc(name)}</b>
+      <small><i class="${m.enabled ? "on" : ""}"></i>${m.enabled ? "On" : "Off"}${m.version ? ` · v${esc(m.version)}` : ""}</small></div></div>
+    <button data-a="toggle">${icon("power")}${m.enabled ? "Turn off" : "Turn on"}</button>
+    <button data-a="edit">${icon("edit")}Edit in Notepad</button>
+    <button data-a="folder">${icon("folder")}Open scripts folder</button>
+    <div class="ctx-sep"></div>
+    <button data-a="delete" class="ctx-danger">${icon("trash")}Delete mod<kbd>Del</kbd></button>`;
+  menu.classList.remove("show"); void menu.offsetWidth; menu.classList.add("show");
+  menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + "px";
+  menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + "px";
+  const act = {
+    toggle: async () => { if (!(await changeModSet([name], !m.enabled))) return; toast(`${name} turned ${m.enabled ? "off" : "on"}`, "ok"); refresh(); },
+    edit: () => api.edit_mod(name),
+    folder: () => api.open_scripts_folder(),
+    delete: () => deleteMod(name),
+  };
+  $$("button", menu).forEach(b => b.onclick = act[b.dataset.a]);
+}
+async function deleteMod(name) {
+  const yes = await new Promise(res => {
+    modal(`<div class="del-head"><div class="del-badge">${icon("trash")}</div>
+        <div><h2>Delete this mod?</h2><span class="pill">${esc(name)}.gsc</span></div></div>
+      <div class="body">It goes to the Recycle Bin, so you can get it back from there if you change your mind.</div>
+      <div class="actions"><button class="btn ghost" id="m-no">Cancel</button><button class="btn danger-solid" id="m-yes">${icon("trash")}Delete</button></div>`);
+    $("#m-no").onclick = () => { closeModal(); res(false); };
+    $("#m-yes").onclick = () => { closeModal(); res(true); };
+  });
+  if (!yes) return;
+  const err = await api.delete_mod(name);
+  if (err) return toast(err, "bad");
+  if (S.selected === name) S.selected = null;
+  toast(`Deleted ${name}`, "ok");
+  refresh();
+}
+document.addEventListener("click", () => $("#mod-menu").classList.remove("show"));
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") $("#mod-menu").classList.remove("show");
+  // Delete key removes the selected mod (asks first), unless you're typing somewhere.
+  if (e.key === "Delete" && S.selected && $("#page-mods.active") && !$("#overlay").classList.contains("show")
+      && !e.target.closest("input:not([type=checkbox]), textarea, [contenteditable]")) {
+    $("#mod-menu").classList.remove("show"); deleteMod(S.selected);
+  }
+  if (e.key === "Delete" && AS.sel && $("#page-assets.active") && !$("#overlay").classList.contains("show")
+      && !e.target.closest("input:not([type=checkbox]), textarea, [contenteditable]")) {
+    $("#mod-menu").classList.remove("show"); deleteAsset(AS.sel);
+  }
+});
+$(".content").addEventListener("scroll", () => $("#mod-menu").classList.remove("show"));
 
 async function renderDetail() {
   const el = $("#detail");
@@ -749,7 +1091,7 @@ async function renderDetail() {
       <span id="d-result" class="muted" style="font-size:13px"></span>
     </div>
     <pre class="code">${highlight(src)}</pre>`;
-  $("#d-toggle").onchange = async e => { await api.set_mods([m.name], e.target.checked); refresh(); };
+  $("#d-toggle").onchange = async e => { await changeModSet([m.name], e.target.checked); refresh(); };
   $("#d-edit").onclick = () => api.edit_mod(m.name);
   const ds = $("#d-studio"); if (ds) ds.onclick = () => { S.proj = m.name; go("studio"); };
   const chk = $("#d-check");
@@ -765,7 +1107,7 @@ $$("#filter button").forEach(b => b.onclick = () => {
   S.filter = b.dataset.f; $$("#filter button").forEach(x => x.classList.toggle("on", x === b)); renderMods();
 });
 $("#undo-btn").onclick = async () => {
-  const a = await api.undo(); toast(a ? `Undid: ${a}` : "Nothing to undo", a ? "ok" : "info"); refresh();
+  const a = await api.undo(); if (a?.error) return toast(a.error, "bad"); toast(a ? `Undid: ${a}` : "Nothing to undo", a ? "ok" : "info"); refresh();
 };
 $("#compile-btn").onclick = async () => {
   modal(`<h2>Checking mods…</h2><div class="body row"><span class="spin"></span>Compiling with Kronos's compiler</div>`);
@@ -788,55 +1130,7 @@ $$("#more-pop button").forEach(b => b.onclick = () => ({ link: () => linkInstall
 const DISCORD_FILE = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//;
 const DISCORD_MESSAGE = /^https:\/\/(\w+\.)?discord(app)?\.com\/channels\//;
 // Pasted links start downloading right away; typed ones wait for the Download button.
-function linkInstall(url = "", start = false) {
-  const copy = "Right-click a mod's post (or its <b>.zip</b>/<b>.gsc</b> file) and choose <b>Copy Link</b>.";
-  modal(`<h2>Get mods from Discord</h2><div class="body">Mods are shared in the <b>#mods</b> forum on the Kronos Discord.
-    <ol class="steps">
-      <li><button class="btn" id="ln-forum"><svg><use href="#i-link"/></svg>Open #mods in Discord</button></li>
-      <li>${copy}</li>
-      <li>Paste the link here. It's safety-checked before anything is installed.</li>
-    </ol></div>
-    <div class="field"><label for="ln-url">Discord link</label><input class="input" id="ln-url" placeholder="Paste the link from Discord" value="${esc(url)}"></div>
-    <div id="ln-pick"></div>
-    <div id="ln-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
-    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="ln-go">Download</button></div>`);
-  $("#ln-url").focus();
-  $("#ln-forum").onclick = () => { api.open_mods_forum(); $("#ln-url").focus(); };
-  $("#ln-url").onkeydown = e => { if (e.key === "Enter") $("#ln-go").click(); };
-  const busy = on => { $("#ln-go").disabled = on; $("#ln-go").textContent = on ? "Downloading…" : "Download"; };
-  const get = async link => {
-    busy(true); $("#ln-err").textContent = "";
-    const r = await api.link_mod(link);
-    if (r.error) { $("#ln-err").textContent = r.error; busy(false); return; }
-    if (r.kind === "post") {
-      // A post link: open the post in Discord and wait for the user to copy one of its files.
-      busy(false);
-      const pick = $("#ln-pick");
-      pick.innerHTML = `<div style="background:var(--ember-soft);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:6px"><b>Opened the post in Discord.</b> Right-click its <b>.zip</b> or <b>.gsc</b> file and choose <b>Copy Link</b>. The download starts here by itself.</div>`;
-      let { seq } = await api.clipboard_link(null);
-      api.open_post(link);
-      const wait = setInterval(async () => {
-        if (!pick.isConnected) return clearInterval(wait);
-        const c = await api.clipboard_link(seq);
-        seq = c.seq;
-        if (c.link && pick.isConnected) { clearInterval(wait); $("#ln-url").value = c.link; pick.innerHTML = ""; get(c.link); }
-      }, 700);
-      return;
-    }
-    if (r.kind === "choose") {
-      // A post with several mod files: let the user pick one.
-      busy(false);
-      $("#ln-pick").innerHTML = `<div style="color:var(--text-2);font-size:13px">“${esc(r.title)}”${r.author ? ` by ${esc(r.author)}` : ""} has ${r.files.length} files. Pick one:</div>
-        <div class="pill-list">${r.files.map((f, i) => `<button class="btn" data-i="${i}">${esc(f.name)}</button>`).join("")}</div>`;
-      $$("#ln-pick button").forEach(b => b.onclick = () => get(r.files[b.dataset.i].url));
-      return;
-    }
-    closeModal();
-    if (r.kind === "gsc") addMods(r.files, true); else installPack(r, true);
-  };
-  $("#ln-go").onclick = () => { $("#ln-pick").innerHTML = ""; get($("#ln-url").value); };
-  if (start) $("#ln-go").click();
-}
+function linkInstall(...args) { return PackUI.linkInstall(...args); }
 // Pasting a Discord link anywhere starts an install: focus is usually in the search box or
 // on a mod's switch, so only the code editor and open dialogs keep a pasted link as text.
 document.addEventListener("paste", e => {
@@ -845,43 +1139,193 @@ document.addEventListener("paste", e => {
   if (DISCORD_FILE.test(text) || DISCORD_MESSAGE.test(text)) { e.preventDefault(); linkInstall(text, true); }
 });
 
-async function addMods(files, fromLink) {
-  files = files || await api.pick_mod_files();
-  if (!files.length) return;
-  const bad = files.filter(f => f.problem), good = files.filter(f => !f.problem), dup = good.filter(f => f.exists);
-  let overwrite = [];
-  if (dup.length) {
-    const yes = await confirmBox("Replace existing mods?", `These already exist: <ul>${dup.map(f => `<li>${esc(f.name)}</li>`).join("")}</ul>The old versions are backed up first.`, "Replace");
-    overwrite = yes ? dup.map(f => f.name) : [];
-  }
-  const msgs = good.length ? await api.import_files(good.map(f => f.path), overwrite) : [];
-  if (fromLink) files.forEach(f => api.forget_link(f.path));
-  modal(`<h2>Add mods</h2><div class="body"><ul>${msgs.concat(bad.map(f => `${f.name}: ${f.problem}`)).map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>
-    <div class="actions"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
-  refresh();
-}
+async function addMods(...args) { return PackUI.addMods(...args); }
 async function exportPack() {
   const r = await api.export_pack();
   if (!r) return;
   toast(`Saved ${r.included.length} mods to ${r.file}` + (r.skipped.length ? ` (skipped ${r.skipped.length} precompiled)` : ""), "ok");
 }
-async function installPack(p, fromLink) {
-  p = p || await api.pick_pack();
-  if (!p) return;
-  if (p.error) return toast(p.error, "bad");
-  modal(`<h2>Install “${esc(p.name)}”</h2><div class="body">
-    ${p.files.length ? `<b>${p.files.length} mods</b> passed the safety check:<div class="pill-list">${p.files.map(f => `<span class="pill">${esc(f)}</span>`).join("")}</div>` : "No usable mods in this pack."}
-    ${p.bad.length ? `<div style="color:var(--bad)">Rejected:</div><ul>${p.bad.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
-    ${p.existing.length ? `<label class="row"><input type="checkbox" id="pk-over"> Replace ${p.existing.length} existing mod(s) (backed up first)</label>` : ""}
-    <label class="row" style="margin-top:8px"><input type="checkbox" id="pk-preset" ${fromLink ? "" : "checked"}> Save as preset “${esc(p.name)}”</label></div>
-    <div class="actions"><button class="btn ghost" id="pk-cancel">Cancel</button>
-    <button class="btn primary" id="pk-go" ${p.files.length ? "" : "disabled"}>Install</button></div>`);
-  $("#pk-cancel").onclick = () => { if (fromLink) api.forget_link(p.path); closeModal(); };
-  $("#pk-go").onclick = async () => {
-    const n = await api.install_pack(p.path, $("#pk-over")?.checked ? p.existing : [], $("#pk-preset").checked);
-    closeModal(); toast(`Installed ${n} mods`, "ok"); refresh();
-  };
+async function installPack(...args) { return PackUI.installPack(...args); }
+
+// ---------------------------------------------------------- assets
+const AS = { list: [], folder: "all", mine: false, sel: null, thumbs: {}, openGroups: new Set(), searchClosed: new Set(), lastQuery: "", groups: [] };
+const IMG_EXT = /\.(png|jpe?g|webp|bmp)$/i;
+const extOf = n => (n.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
+const fmtSize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : b >= 1024 ? Math.round(b / 1024) + " KB" : b + " B";
+const assetDir = a => a.path.includes("/") ? a.path.slice(0, a.path.lastIndexOf("/")) : "";
+function assetThumb(a) {
+  const url = AS.thumbs[a.path], ext = extOf(a.name);
+  if (url) return `<img src="${url}" alt="" loading="lazy">`;
+  const kind = ext === "lua" ? "lua" : /^(png|jpe?g|webp|bmp|dds|tga)$/.test(ext) ? "img" : "data";
+  return `<span class="ext ${kind}">${esc(ext.toUpperCase() || "FILE")}</span>`;
 }
+async function loadAssets() {
+  AS.list = await api.assets();
+  if (AS.sel && !AS.list.some(a => a.path === AS.sel)) AS.sel = null;
+  $("#nav-assets").textContent = AS.list.length;
+  renderAssets();
+}
+function assetGroup(a) {
+  const parts = a.path.split("/"), folder = parts[0];
+  if (a.mine) {
+    const pack = a.pack || "Added by you";
+    return { key: a.pack_id ? "managed:" + a.pack_id : "added:" + pack, label: pack, hint: "Added by you", rank: 0 };
+  }
+  if (folder === "Images") {
+    if (["perks", "powerups"].includes(parts[1])) {
+      if (parts.length >= 4) {
+        const kind = parts[1] === "perks" ? "Perk icons" : "Powerup icons";
+        return { key: parts.slice(0, 3).join("/"), label: parts[2] + " · " + kind, hint: parts.slice(0, 3).join("/"), rank: 1 };
+      }
+      return { key: "guides", label: "Pack guides", hint: "Perk and powerup folder guides", rank: 4 };
+    }
+    if (parts.length === 2) return { key: "Images/root", label: "HUD & theme images", hint: "Images", rank: 2 };
+  }
+  const dir = assetDir(a) || "Other files";
+  const labels = { Lua: "Lua scripts", Camos: "Camos", MapEnts: "Map entities", Rawfiles: "Raw files", Scripts: "Asset scripts", StringTable: "String tables" };
+  return { key: dir, label: labels[dir] || dir, hint: dir, rank: 3 };
+}
+function renderAssets() {
+  const folderOf = a => a.folder || "Other";
+  const folders = [...new Set(AS.list.map(folderOf))].sort();
+  if (AS.folder !== "all" && !folders.includes(AS.folder)) AS.folder = "all";
+  const mine = AS.list.filter(a => a.mine).length;
+  $("#as-chips").innerHTML = [["all", "All", AS.list.length], ...folders.map(f => [f, f, AS.list.filter(a => folderOf(a) === f).length])]
+    .map(([k, label, n]) => `<button class="as-chip ${AS.folder === k ? "on" : ""}" data-f="${esc(k)}">${esc(label)}<span>${n}</span></button>`).join("") +
+    `<span style="flex:1"></span><button class="as-chip ${AS.mine ? "on" : ""}" id="as-mine"><i class="dot" style="background:var(--ember);box-shadow:0 0 6px var(--ember)"></i>Added by you<span>${mine}</span></button>`;
+  $$("#as-chips [data-f]").forEach(b => b.onclick = () => { AS.folder = b.dataset.f; renderAssets(); });
+  $("#as-mine").onclick = () => { AS.mine = !AS.mine; renderAssets(); };
+
+  const q = $("#as-search").value.toLowerCase().trim();
+  if (q !== AS.lastQuery) { AS.searchClosed.clear(); AS.lastQuery = q; }
+  const shown = AS.list.filter(a => (AS.folder === "all" || folderOf(a) === AS.folder) && (!AS.mine || a.mine)
+    && (!q || a.path.toLowerCase().includes(q) || (a.pack || "").toLowerCase().includes(q) || assetGroup(a).label.toLowerCase().includes(q)));
+  const byGroup = new Map();
+  shown.forEach(a => {
+    const group = assetGroup(a);
+    if (!byGroup.has(group.key)) byGroup.set(group.key, { ...group, files: [] });
+    byGroup.get(group.key).files.push(a);
+  });
+  AS.groups = [...byGroup.values()].sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+  $("#as-group-count").textContent = `${AS.groups.length} group${AS.groups.length === 1 ? "" : "s"} · ${shown.length} file${shown.length === 1 ? "" : "s"}`;
+  $("#as-expand").disabled = $("#as-collapse").disabled = !shown.length;
+  const el = $("#asset-list");
+  if (!shown.length) {
+    el.innerHTML = `<div class="card empty">${icon("image")}<div>${AS.list.length ? "No assets match." : "No assets yet. Click Get assets to find some on the Kronos Discord."}</div></div>`;
+  } else {
+    el.innerHTML = AS.groups.map((group, i) => {
+      const open = q ? !AS.searchClosed.has(group.key) : AS.openGroups.has(group.key);
+      return `<details class="as-group" data-group="${i}" ${open ? "open" : ""}>
+        <summary>${icon("folder")}<span class="as-group-title"><b>${esc(group.label)}</b><small>${esc(group.hint)}</small></span><span class="as-group-count">${group.files.length} file${group.files.length === 1 ? "" : "s"}</span></summary>
+        <div class="as-grid"></div></details>`;
+    }).join("");
+    $$(".as-group", el).forEach(details => {
+      const group = AS.groups[Number(details.dataset.group)];
+      details.ontoggle = () => {
+        if (!details.isConnected) return;
+        if (q) details.open ? AS.searchClosed.delete(group.key) : AS.searchClosed.add(group.key);
+        else details.open ? AS.openGroups.add(group.key) : AS.openGroups.delete(group.key);
+        if (details.open) fillAssetGroup(details, group);
+        else { $(".as-grid", details).innerHTML = ""; delete details.dataset.loaded; }
+      };
+      if (details.open) fillAssetGroup(details, group);
+    });
+  }
+  renderAssetDetail();
+}
+function fillAssetGroup(details, group) {
+  if (details.dataset.loaded) return;
+  details.dataset.loaded = "1";
+  const grid = $(".as-grid", details);
+  grid.innerHTML = group.files.map(a => `<div class="asset ${AS.sel === a.path ? "sel" : ""}" data-p="${esc(a.path)}" title="${esc(a.path)}">
+    <div class="thumb">${assetThumb(a)}</div><div class="nm">${esc(a.name)}</div>${a.mine ? `<i class="yours" title="Added by you"></i>` : ""}</div>`).join("");
+  $$(".asset", grid).forEach(tile => {
+    tile.onclick = () => { AS.sel = tile.dataset.p; $$("#asset-list .asset.sel").forEach(x => x.classList.remove("sel")); tile.classList.add("sel"); renderAssetDetail(); };
+    tile.oncontextmenu = event => { event.preventDefault(); assetMenu(tile.dataset.p, event.clientX, event.clientY); };
+  });
+  loadThumbs(group.files.filter(a => IMG_EXT.test(a.name) && !(a.path in AS.thumbs)).map(a => a.path));
+}
+function setAllAssetGroups(open) {
+  AS.groups.forEach(group => {
+    if (AS.lastQuery) open ? AS.searchClosed.delete(group.key) : AS.searchClosed.add(group.key);
+    else open ? AS.openGroups.add(group.key) : AS.openGroups.delete(group.key);
+  });
+  renderAssets();
+}
+$("#as-expand").onclick = () => setAllAssetGroups(true);
+$("#as-collapse").onclick = () => setAllAssetGroups(false);
+async function loadThumbs(paths) {
+  for (let i = 0; i < paths.length; i += 120) {
+    const batch = paths.slice(i, i + 120), got = await api.asset_thumbs(batch);
+    batch.forEach(p => {
+      AS.thumbs[p] = got[p] || null;
+      const a = AS.list.find(x => x.path === p), t = $(`.asset[data-p="${CSS.escape(p)}"] .thumb`);
+      if (a && t && got[p]) t.innerHTML = assetThumb(a);
+    });
+  }
+}
+async function renderAssetDetail() {
+  const el = $("#asset-detail"), a = AS.list.find(x => x.path === AS.sel);
+  if (!a) { el.innerHTML = `<div class="empty">${icon("image")}<div>Select an asset to preview it.</div></div>`; return; }
+  const ext = extOf(a.name);
+  el.innerHTML = `<div id="as-prev"><div class="as-big">${AS.thumbs[a.path] ? assetThumb(a) : '<span class="spin"></span>'}</div></div>
+    <h3 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</h3>
+    <span class="pill" title="Assets/${esc(a.path)}">Assets/${esc(a.path)}</span>
+    <div class="as-meta">
+      <div><span>Type</span><b>.${esc(ext)}</b></div><div><span>Size</span><b>${fmtSize(a.size)}</b></div>
+      <div><span>Changed</span><b>${esc(a.modified)}</b></div>
+      <div><span>From</span><b title="${esc(a.pack || "")}">${a.mine ? esc(a.pack || "Kronos Plus") : "Kronos or by hand"}</b></div></div>
+    <div class="row"><button class="btn sm" id="as-show">${icon("folder")}Show in folder</button>${a.pack_id ? `<button class="btn sm" id="as-pack">Manage pack</button>` : ""}<span style="flex:1"></span>
+      <button class="btn sm danger" id="as-del">${icon("trash")}Delete</button></div>`;
+  $("#as-show").onclick = () => api.show_asset(a.path);
+  if (a.pack_id) $("#as-pack").onclick = () => PackUI.details(a.pack_id);
+  $("#as-del").onclick = () => deleteAsset(a.path);
+  const p = await api.asset_preview(a.path);
+  if (AS.sel !== a.path || !$("#as-prev")) return;
+  $("#as-prev").innerHTML = p.image ? `<div class="as-big"><img src="${p.image}" alt=""></div>`
+    : p.text != null ? `<pre class="code">${esc(p.text)}${p.cut ? "\n…" : ""}</pre>`
+    : `<div class="as-big"><div style="text-align:center">${assetThumb({ ...a, path: "" })}<div class="muted">${p.error ? esc(p.error) : `No preview for .${esc(ext)} files`}</div></div></div>`;
+}
+function assetMenu(path, x, y) {
+  const a = AS.list.find(i => i.path === path);
+  if (!a) return;
+  const menu = $("#mod-menu");
+  menu.innerHTML = `<div class="ctx-head"><div class="mod-icon as-mini">${assetThumb(a)}</div><div><b>${esc(a.name)}</b>
+      <small>${a.mine ? `<i class="on" style="background:var(--ember);box-shadow:0 0 6px var(--ember)"></i>Added by you` : `<i></i>${esc(assetDir(a) || "Assets")}`} · ${fmtSize(a.size)}</small></div></div>
+    <button data-a="show">${icon("folder")}Show in folder</button>
+    <button data-a="open">${icon("image")}Open assets folder</button>
+    <div class="ctx-sep"></div>
+    <button data-a="delete" class="ctx-danger">${icon("trash")}Delete asset<kbd>Del</kbd></button>`;
+  menu.classList.remove("show"); void menu.offsetWidth; menu.classList.add("show");
+  menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + "px";
+  menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + "px";
+  const act = { show: () => api.show_asset(path), open: () => api.open_assets_folder(), delete: () => deleteAsset(path) };
+  $$("button", menu).forEach(b => b.onclick = act[b.dataset.a]);
+}
+async function deleteAsset(path) {
+  const a = AS.list.find(i => i.path === path);
+  if (!a) return;
+  const yes = await new Promise(res => {
+    modal(`<div class="del-head"><div class="del-badge">${icon("trash")}</div>
+        <div><h2>Delete this asset?</h2><span class="pill">${esc(a.path)}</span></div></div>
+      <div class="body">It goes to the Recycle Bin, so you can get it back from there if you change your mind.
+        ${a.mine ? "" : `<div class="warn-box">${icon("alert")}<span>Kronos Plus didn't add this file, so it may have come with Kronos. Menus or mods that use it could break.</span></div>`}</div>
+      <div class="actions"><button class="btn ghost" id="m-no">Cancel</button><button class="btn danger-solid" id="m-yes">${icon("trash")}Delete</button></div>`);
+    $("#m-no").onclick = () => { closeModal(); res(false); };
+    $("#m-yes").onclick = () => { closeModal(); res(true); };
+  });
+  if (!yes) return;
+  const err = await api.delete_asset(path);
+  if (err) return toast(err, "bad");
+  if (AS.sel === path) AS.sel = null;
+  delete AS.thumbs[path];
+  toast(`Deleted ${a.name}`, "ok");
+  loadAssets();
+}
+$("#as-search").oninput = renderAssets;
+$("#as-folder").onclick = () => api.open_assets_folder();
+$("#as-add").onclick = () => installPack();
+$("#as-get").onclick = () => linkInstall(S.ov.assetsForumUrl, true);
 
 // ---------------------------------------------------------- troubleshoot
 function renderTrouble() {
@@ -1511,6 +1955,7 @@ async function updateNow() {
   if (err) { toast(err, "bad"); btns.forEach((b, i) => { b.disabled = false; b.innerHTML = labels[i]; }); }
 }
 
+PackUI.init();
 window.addEventListener("pywebviewready", async () => {
   api = window.pywebview.api;
   await refresh();
