@@ -122,6 +122,11 @@ def launcher_path(state):
     return None
 
 
+def launch_game(launcher):
+    from game_launch import STARTER
+    return STARTER.start(launcher, lambda: "cod25-cod.exe" in running_processes())
+
+
 def load_state():
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
@@ -1201,7 +1206,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "2.0"  # Release sequence: 1.8, 1.9, 2.0, 2.1, ...
+APP_VERSION = "2.1"  # Release sequence: 1.8, 1.9, 2.0, 2.1, ...
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")
@@ -2034,11 +2039,13 @@ def run_ui():
         root.config(cursor="")
         if problems and not messagebox.askyesno(
                 "Before you play", "Found some things to check:\n\n• " + "\n• ".join(problems) +
-                "\n\nOpen the Kronos launcher anyway?"):
+                "\n\nStart Kronos anyway?"):
             return
-        os.startfile(launcher)
+        result = launch_game(launcher)
+        if result.get("error"):
+            messagebox.showerror("Couldn't start Kronos", result["error"])
 
-    ttk.Button(top, text="▶  Check & open Kronos launcher", command=play).pack(side="right")
+    ttk.Button(top, text="▶  Check & play", command=play).pack(side="right")
     ttk.Button(top, text="◐ Dark mode", command=toggle_dark).pack(side="right", padx=6)
 
     banner = ttk.Label(root, style="Banner.TLabel")

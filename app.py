@@ -866,14 +866,9 @@ class Api:
         return core.prelaunch_problems(self._state)
 
     def launch(self):
-        """Open Kronos's launcher, where the game is started. {"status": "playing" | "shown" | "opened"} or {"error"}.
-
-        Starting the launcher while it's already open does nothing visible, so an open one is brought to the front."""
-        procs = core.running_processes()
-        if "cod25-cod.exe" in procs:
+        """Start the game through the configured Kronos launcher's own Play button."""
+        if "cod25-cod.exe" in core.running_processes():
             return {"status": "playing"}
-        if "kronoslauncher.exe" in procs and focus_window(core.process_ids("kronoslauncher.exe")):
-            return {"status": "shown"}
         launcher = core.launcher_path(self._state)
         if not launcher:
             import webview
@@ -883,13 +878,7 @@ class Api:
             launcher = picked[0] if isinstance(picked, (list, tuple)) else picked
             self._state["launcher"] = launcher
             core.save_state(self._state)
-        try:
-            os.startfile(launcher)
-        except OSError as e:
-            if getattr(e, "winerror", None) == 1223:  # the user said No to Windows' permission prompt
-                return {"error": "The Kronos launcher needs your OK to start. Click Play again and choose Yes."}
-            return {"error": f"Couldn't start the Kronos launcher: {e.strerror or e}"}
-        return {"status": "opened"}
+        return core.launch_game(launcher)
 
 
 WEBVIEW2_KEY = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
