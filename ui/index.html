@@ -603,6 +603,19 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
 .pk-attachment input { margin-top: 3px; flex: none; }
 .pk-review-details { margin: 12px 0; }
 .pk-review-details > summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
+/* Mods shown under a name you picked: the file name sits beside it, smaller. */
+.mod-file { color: var(--text-3); font: 400 11.5px var(--mono); margin-left: 7px; }
+.ctx-head .ctx-file, .detail-file { display: block; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-file { margin: -2px 0 6px; }
+.folder-path { display: block; color: var(--text-3); font: 400 12px var(--mono); overflow-wrap: anywhere; margin-top: 2px; }
+.setting > label .folder-path { cursor: text; user-select: text; }
+.notes { max-height: 300px; overflow: auto; background: var(--bg-2); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; }
+.notes h4 { margin: 10px 0 4px; font-size: 13.5px; }
+.notes h4:first-child { margin-top: 2px; }
+.notes ul { margin: 4px 0 8px; padding-left: 18px; }
+.notes p { margin: 4px 0; }
+.notes code { font-family: var(--mono); font-size: 12.5px; }
+.report { max-height: 340px; overflow: auto; white-space: pre-wrap; font-size: 12px; margin: 0 0 12px; }
 </style>
 </head>
 <body>
@@ -634,6 +647,8 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
   <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
   <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z"/><circle cx="8" cy="8" r="1.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
   <symbol id="i-refresh"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
 </svg>
 
@@ -769,9 +784,14 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
         </div>
         <div class="card">
           <h3><svg><use href="#i-bolt"/></svg>Find the crashing mod</h3>
-          <p class="sub">Turns half your mods off at a time. Play a match after each step and say whether it crashed — about 3 tries for 8 mods.</p>
+          <p class="sub">Turns half your mods off at a time. Play a match after each step and say whether it crashed. It takes about 3 tries for 8 mods.</p>
           <div id="bisect"></div>
         </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3><svg><use href="#i-copy"/></svg>Ask for help</h3>
+        <p class="sub">Copies your mod list, health check and latest errors so people in the Kronos Discord can see what's wrong. Your Windows user folder and in-game name are left out.</p>
+        <div class="row"><button class="btn primary" id="help-copy"><svg><use href="#i-copy"/></svg>Copy help report</button><button class="btn" id="help-view">Preview</button></div>
       </div>
       <div class="card" style="margin-top:16px">
         <h3><svg><use href="#i-undo"/></svg>Change history</h3>
@@ -807,8 +827,11 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
         <div class="card"><h3><svg><use href="#i-bolt"/></svg>Gameplay</h3><p class="sub">Kronos's own options from settings.json.</p><div id="set-game"></div></div>
         <div class="card"><h3><svg><use href="#i-sliders"/></svg>Profile &amp; keys</h3><p class="sub">Your in-game name and shortcut keys.</p><div id="set-text"></div></div>
         <div class="card"><h3><svg><use href="#i-file"/></svg>Logging</h3><p class="sub">Useful when writing or debugging mods.</p><div id="set-log"></div></div>
-        <div class="card"><h3><svg><use href="#i-undo"/></svg>Backups</h3><p class="sub">A copy is saved every time you save.</p>
+        <div class="card"><h3><svg><use href="#i-undo"/></svg>Settings backups</h3><p class="sub">A copy of settings.json is saved every time you save.</p>
           <div class="row"><select class="input" id="backup-sel" style="flex:1"></select><button class="btn" id="restore-btn">Restore</button></div></div>
+        <div class="card"><h3><svg><use href="#i-folder"/></svg>Folders</h3><p class="sub">Kronos's launcher decides where mods, assets and the game live. Change them there and Kronos Plus follows.</p><div id="set-folders"></div></div>
+        <div class="card"><h3><svg><use href="#i-box"/></svg>Full backup</h3><p class="sub">Saves your mods, assets, packs, presets and Kronos settings in one file. Make one before a BO7 update.</p>
+          <div class="row"><button class="btn primary" id="setup-backup"><svg><use href="#i-download"/></svg>Back up now…</button><button class="btn" id="setup-restore"><svg><use href="#i-undo"/></svg>Restore a backup…</button></div></div>
         <div class="card"><h3><svg><use href="#i-code"/></svg>Kronos Plus</h3><p class="sub">Options for this app. These apply right away.</p>
           <div class="setting"><label for="dev-toggle">Developer mode<br><span class="muted" style="font-size:12.5px">Adds Studio: a GSC linter, mod manifests and one-click testing.</span></label>
             <label class="switch"><input type="checkbox" id="dev-toggle"><span></span></label></div></div>
@@ -923,6 +946,8 @@ async function changeModSet(names, enabled) {
     return true;
   } catch (error) { toast("Couldn't change these mods", "bad"); refresh(); return false; }
 }
+// The name a mod is shown under: the one you gave it, else its file name.
+const modTitle = name => S.ov.mods.find(m => m.name === name)?.title || name;
 const modKind = m => m.prepared ? ["pr", "PR"] : m.name.startsWith("zm_") ? ["zm", "ZM"] : m.name.startsWith("mp_") ? ["mp", "MP"] : ["", "GSC"];
 const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 
@@ -961,7 +986,14 @@ async function refresh() {
   $("#nav-studio").style.display = $("#nav-console").style.display = S.ov.devMode ? "" : "none";
   $("#dev-toggle").checked = S.ov.devMode;
   if (!S.ov.devMode && ($("#page-studio.active") || $("#page-console.active"))) go("mods");
-  renderPresets(); renderMods(); renderTrouble();
+  renderPresets(); renderMods(); renderTrouble(); renderFolders();
+}
+
+function renderFolders() {
+  $("#set-folders").innerHTML = S.ov.folders.map(f => `<div class="setting" title="${esc(f.note)}">
+    <label>${esc(f.label)}<span class="folder-path">${esc(f.path)}</span></label>
+    <button class="btn sm" data-folder="${esc(f.key)}">${icon("folder")}Open</button></div>`).join("");
+  $$("#set-folders [data-folder]").forEach(b => b.onclick = () => api.open_folder(b.dataset.folder));
 }
 
 function renderPresets() {
@@ -990,7 +1022,7 @@ function renderPresets() {
 function renderMods() {
   const q = $("#search").value.toLowerCase().trim();
   const mods = S.ov.mods.filter(m => (S.filter === "all" || (S.filter === "on") === m.enabled) &&
-    (!q || m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q)));
+    (!q || m.name.toLowerCase().includes(q) || m.title.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q)));
   const list = $("#mod-list");
   if (!mods.length) {
     list.innerHTML = `<div class="empty">${icon("mods")}<div>${S.ov.mods.length ? "No mods match." : "No mods yet. Click New mod to make one."}</div></div>`;
@@ -999,7 +1031,7 @@ function renderMods() {
       const [k, label] = modKind(m);
       return `<div class="mod ${m.enabled ? "" : "off"} ${S.selected === m.name ? "sel" : ""}" data-n="${esc(m.name)}">
         <div class="mod-icon ${k}">${label}</div>
-        <div class="mod-main"><div class="mod-name">${esc(m.name)}${m.version ? `<span class="tag ver">v${esc(m.version)}</span>` : ""}${m.prepared ? '<span class="tag warn">Precompiled</span>' : ""}</div>
+        <div class="mod-main"><div class="mod-name" title="${esc(m.name)}.gsc">${esc(m.title || m.name)}${m.title ? `<span class="mod-file">${esc(m.name)}</span>` : ""}${m.version ? `<span class="tag ver">v${esc(m.version)}</span>` : ""}${m.prepared ? '<span class="tag warn">Precompiled</span>' : ""}${m.kronos ? `<span class="tag ver" title="Comes with Kronos. If you turn it off, Kronos's launcher puts it back when it starts, and Kronos Plus turns it off again.">Kronos</span>` : ""}</div>
         <div class="mod-desc">${esc(m.desc || (m.enabled ? "On" : "Off"))}</div></div>
         <label class="switch" title="${m.enabled ? "Turn off" : "Turn on"}"><input type="checkbox" ${m.enabled ? "checked" : ""}><span></span></label></div>`;
     }).join("");
@@ -1009,7 +1041,7 @@ function renderMods() {
     row.oncontextmenu = e => { e.preventDefault(); modMenu(row.dataset.n, e.clientX, e.clientY); };
     $("input", row).onchange = async e => {
       if (!(await changeModSet([row.dataset.n], e.target.checked))) return;
-      toast(`${row.dataset.n} turned ${e.target.checked ? "on" : "off"}`, "ok");
+      toast(`${modTitle(row.dataset.n)} turned ${e.target.checked ? "on" : "off"}`, "ok");
       refresh();
     };
   });
@@ -1022,9 +1054,10 @@ function modMenu(name, x, y) {
   if (!m) return;
   const [k, label] = modKind(m);
   const menu = $("#mod-menu");
-  menu.innerHTML = `<div class="ctx-head"><div class="mod-icon ${k}">${label}</div><div><b>${esc(name)}</b>
+  menu.innerHTML = `<div class="ctx-head"><div class="mod-icon ${k}">${label}</div><div><b>${esc(m.title || name)}</b>${m.title ? `<span class="mod-file ctx-file">${esc(name)}</span>` : ""}
       <small><i class="${m.enabled ? "on" : ""}"></i>${m.enabled ? "On" : "Off"}${m.version ? ` · v${esc(m.version)}` : ""}</small></div></div>
     <button data-a="toggle">${icon("power")}${m.enabled ? "Turn off" : "Turn on"}</button>
+    <button data-a="rename">${icon("tag")}Rename…<kbd>F2</kbd></button>
     <button data-a="edit">${icon("edit")}Edit in Notepad</button>
     <button data-a="folder">${icon("folder")}Open scripts folder</button>
     <div class="ctx-sep"></div>
@@ -1033,7 +1066,8 @@ function modMenu(name, x, y) {
   menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + "px";
   menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + "px";
   const act = {
-    toggle: async () => { if (!(await changeModSet([name], !m.enabled))) return; toast(`${name} turned ${m.enabled ? "off" : "on"}`, "ok"); refresh(); },
+    toggle: async () => { if (!(await changeModSet([name], !m.enabled))) return; toast(`${m.title || name} turned ${m.enabled ? "off" : "on"}`, "ok"); refresh(); },
+    rename: () => renameMod(name),
     edit: () => api.edit_mod(name),
     folder: () => api.open_scripts_folder(),
     delete: () => deleteMod(name),
@@ -1050,11 +1084,36 @@ async function deleteMod(name) {
     $("#m-yes").onclick = () => { closeModal(); res(true); };
   });
   if (!yes) return;
+  const title = modTitle(name);
   const err = await api.delete_mod(name);
   if (err) return toast(err, "bad");
   if (S.selected === name) S.selected = null;
-  toast(`Deleted ${name}`, "ok");
+  toast(`Deleted ${title}`, "ok");
   refresh();
+}
+// Only the name shown in this app changes; the file keeps its name so Kronos, packs and presets still find it.
+function renameMod(name) {
+  const m = S.ov.mods.find(x => x.name === name);
+  if (!m) return;
+  modal(`<h2>Rename mod</h2>
+    <div class="body">Changes the name shown in Kronos Plus. The file stays <span class="pill">${esc(name)}.gsc</span>, so Kronos and your packs keep working.</div>
+    <div class="field"><label for="rn-name">Name</label><input class="input" id="rn-name" maxlength="60" value="${esc(m.title || name)}"></div>
+    <div class="pk-error" id="rn-error"></div>
+    <div class="actions">${m.title ? `<button class="btn ghost" id="rn-reset" style="margin-right:auto">Use file name</button>` : ""}
+      <button class="btn ghost" id="rn-no">Cancel</button><button class="btn primary" id="rn-save">Save</button></div>`);
+  const input = $("#rn-name");
+  setTimeout(() => input.select(), 40);
+  const save = async title => {
+    const r = await api.rename_mod(name, title);
+    if (r?.error) { $("#rn-error").textContent = r.error; return; }
+    closeModal();
+    toast(r.title ? `Renamed to ${r.title}` : `Showing ${name} again`, "ok");
+    refresh();
+  };
+  $("#rn-save").onclick = () => save(input.value);
+  input.onkeydown = e => e.key === "Enter" && save(input.value);
+  $("#rn-no").onclick = closeModal;
+  const reset = $("#rn-reset"); if (reset) reset.onclick = () => save("");
 }
 document.addEventListener("click", () => $("#mod-menu").classList.remove("show"));
 document.addEventListener("keydown", e => {
@@ -1063,6 +1122,10 @@ document.addEventListener("keydown", e => {
   if (e.key === "Delete" && S.selected && $("#page-mods.active") && !$("#overlay").classList.contains("show")
       && !e.target.closest("input:not([type=checkbox]), textarea, [contenteditable]")) {
     $("#mod-menu").classList.remove("show"); deleteMod(S.selected);
+  }
+  if (e.key === "F2" && S.selected && $("#page-mods.active") && !$("#overlay").classList.contains("show")
+      && !e.target.closest("input:not([type=checkbox]), textarea, [contenteditable]")) {
+    e.preventDefault(); $("#mod-menu").classList.remove("show"); renameMod(S.selected);
   }
   if (e.key === "Delete" && AS.sel && $("#page-assets.active") && !$("#overlay").classList.contains("show")
       && !e.target.closest("input:not([type=checkbox]), textarea, [contenteditable]")) {
@@ -1081,9 +1144,10 @@ async function renderDetail() {
   const src = await api.source(m.name);
   if (S.selected !== m.name) return;
   el.innerHTML = `
-    <div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">${esc(m.name)}</h3>
+    <div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">${esc(m.title || m.name)}</h3>
       <label class="switch"><input type="checkbox" id="d-toggle" ${m.enabled ? "checked" : ""}><span></span></label></div>
-    <p class="sub">${m.prepared ? "Precompiled mod — the readable file is only a stub, the real code can't be shown or checked." : esc(m.desc || "No description.")}</p>
+    ${m.title ? `<div class="mod-file detail-file">${esc(m.name)}.gsc</div>` : ""}
+    <p class="sub">${m.prepared ? "Precompiled mod. The readable file is only a stub, the real code can't be shown or checked." : esc(m.desc || "No description.")}</p>
     <div class="row" style="margin-bottom:12px">
       <button class="btn sm" id="d-edit">${icon("edit")}Edit in Notepad</button>
       ${m.prepared ? "" : `<button class="btn sm" id="d-check">${icon("code")}Check it compiles</button>`}
@@ -1331,7 +1395,7 @@ $("#as-get").onclick = () => linkInstall(S.ov.assetsForumUrl, true);
 function renderTrouble() {
   if (!S.ov) return;
   $("#safe-toggle").checked = S.ov.safeMode;
-  $("#safe-text").innerHTML = S.ov.safeMode ? "<b>On</b> <span class='muted'>— every mod is off</span>" : "<span class='muted'>Off — your mods load normally</span>";
+  $("#safe-text").innerHTML = S.ov.safeMode ? "<b>On</b> <span class='muted'>(every mod is off)</span>" : "<span class='muted'>Off (your mods load normally)</span>";
   const b = S.ov.bisect, el = $("#bisect");
   if (!b) {
     el.innerHTML = `<button class="btn primary" id="b-start">${icon("bolt")}Start crash search</button>`;
@@ -1339,7 +1403,7 @@ function renderTrouble() {
   } else {
     const total = Math.max(1, Math.ceil(Math.log2(b.original.length)));
     el.innerHTML = `<div class="steps">${Array.from({ length: total }, (_, i) => `<i class="${i < b.round ? "done" : ""}"></i>`).join("")}</div>
-      <div>Round ${b.round} — only these are on now:</div>
+      <div>Round ${b.round}. Only these are on now:</div>
       <div class="pill-list">${b.testing.map(m => `<span class="pill">${esc(m)}</span>`).join("")}</div>
       <div class="muted" style="font-size:13px;margin-bottom:12px">Play a Zombies match, then tell us what happened.</div>
       <div class="row"><button class="btn" id="b-crash" style="color:var(--bad)">It crashed</button><button class="btn" id="b-ok" style="color:var(--ok)">No crash</button>
@@ -1361,7 +1425,7 @@ function renderTrouble() {
 }
 $("#safe-toggle").onchange = async e => {
   const err = await api.safe_mode(e.target.checked);
-  err ? toast(err, "bad") : toast(e.target.checked ? "Safe mode on — all mods off" : "Mods restored", "ok");
+  err ? toast(err, "bad") : toast(e.target.checked ? "Safe mode on, all mods off" : "Mods restored", "ok");
   refresh();
 };
 
@@ -1372,7 +1436,7 @@ async function loadSessions() {
   $("#st-time").textContent = fmtMin(d.minutes);
   $("#st-crashes").textContent = d.crashes;
   $("#sessions").innerHTML = d.sessions.length ? `<table><tr><th>Started</th><th>Length</th><th>Crash</th><th>Mods on</th></tr>` +
-    d.sessions.map(s => `<tr><td>${esc(s.start)}</td><td>${fmtMin(s.minutes)}</td><td>${s.crash ? '<span style="color:var(--bad)">Yes</span>' : '<span class="muted">—</span>'}</td>
+    d.sessions.map(s => `<tr><td>${esc(s.start)}</td><td>${fmtMin(s.minutes)}</td><td>${s.crash ? '<span style="color:var(--bad)">Yes</span>' : '<span class="muted">No</span>'}</td>
     <td class="mono">${esc(s.mods.join(", "))}</td></tr>`).join("") + `</table>`
     : `<div class="empty">${icon("clock")}<div>No sessions yet. Keep this app open while you play.</div></div>`;
   $("#suspects").innerHTML = d.suspects.length ? d.suspects.map(s => `<div style="margin-bottom:12px"><div class="row" style="justify-content:space-between">
@@ -1441,10 +1505,19 @@ $("#health-run").onclick = loadHealth;
 $("#handled-btn").onclick = async () => { await api.mark_update_handled(); toast("Update marked as handled", "ok"); loadHealth(); refresh(); };
 
 // ---------------------------------------------------------- play + theme + sessions
+// Kronos Plus opens Kronos's launcher; the game itself starts from the launcher's own Play button.
+async function openLauncher() {
+  try { return await api.launch(); } catch (e) { return { error: "Couldn't start the Kronos launcher." }; }
+}
+function launchToast(r, opened = "Kronos launcher opened. Click Play there to start the game") {
+  if (r.error) return toast(r.error, "bad");
+  toast({ playing: "The game is already running", shown: "The Kronos launcher is already open. Click Play there to start the game" }[r.status] || opened,
+    r.status === "playing" ? "info" : "ok");
+}
 $("#play-btn").onclick = async () => {
   modal(`<h2>Getting ready…</h2><div class="body row"><span class="spin"></span>Checking your setup and mods</div>`);
   const problems = await api.prelaunch();
-  const launch = async () => { const err = await api.launch(); closeModal(); err ? toast(err, "bad") : toast("Opening the Kronos launcher", "ok"); };
+  const launch = async () => { const r = await openLauncher(); closeModal(); launchToast(r); };
   if (!problems.length) return launch();
   modal(`<h2>Before you play</h2><div class="body">Found ${problems.length} thing${problems.length > 1 ? "s" : ""} to check:<ul>${problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
     <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Play anyway</button></div>`);
@@ -1453,17 +1526,22 @@ $("#play-btn").onclick = async () => {
 $("#theme-btn").onclick = async () => { await api.set_theme(!S.ov.dark); refresh(); };
 
 async function pollSession() {
-  const r = await api.poll_session();
+  let r = await api.poll_session();
+  if (r && typeof r === "object") {
+    toast(`Kronos's launcher put back ${r.fixed.map(modTitle).join(", ")}. Turned ${r.fixed.length > 1 ? "them" : "it"} off again`, "info");
+    r = r.state;
+    refresh();
+  }
   $("#live-dot").classList.toggle("live", r === "playing");
   $("#live-text").textContent = r === "playing" ? "Playing now" : "Not playing";
   if (r === "ended") { toast("Session saved to Play history", "ok"); loadSessions(); }
-  if (r === "ended-test") { toast("Test finished — your mods are back", "ok"); refresh(); if ($("#page-studio.active")) loadStudio(); }
+  if (r === "ended-test") { toast("Test finished, your mods are back", "ok"); refresh(); if ($("#page-studio.active")) loadStudio(); }
 }
 
 // ---------------------------------------------------------- studio (dev mode)
 $("#dev-toggle").onchange = async e => {
   await api.set_dev_mode(e.target.checked);
-  toast(e.target.checked ? "Developer mode on — Studio is in the sidebar" : "Developer mode off", "ok");
+  toast(e.target.checked ? "Developer mode on. Studio is in the sidebar" : "Developer mode off", "ok");
   refresh();
 };
 
@@ -1524,7 +1602,7 @@ async function loadProject(name) {
     <div id="pj-body"></div>`;
   $("#pj-edit").onclick = async () => {
     if (S.ed && S.ed.name === name && edDirty() && !(await saveEditor())) return;
-    toast(`Opening in ${await api.open_in_editor(name)} — changes you save there show up here`, "info");
+    toast(`Opening in ${await api.open_in_editor(name)}. Changes you save there show up here`, "info");
   };
   $("#pj-check").onclick = () => checkProject(name);
   $("#pj-test").onclick = () => testAlone(name);
@@ -1563,7 +1641,7 @@ function renderManifestTab(p) {
       <div class="field"><label>Game mode</label><div class="seg" id="mf-mode">${["zm", "mp", "any"].map(k =>
         `<button data-m="${k}" class="${m.mode === k ? "on" : ""}">${{ zm: "Zombies", mp: "Multiplayer", any: "Any" }[k]}</button>`).join("")}</div></div></div>
     <div class="field"><label>Description</label><textarea class="input" id="mf-desc" placeholder="What does this mod do?">${esc(m.description || "")}</textarea></div>
-    <div class="field"><label>Requires — these get turned on too when you test this mod</label>
+    <div class="field"><label>Requires (these get turned on too when you test this mod)</label>
       <div class="req-chips">${p.others.length ? p.others.map(o => `<label><input type="checkbox" value="${esc(o)}" ${m.requires.includes(o) ? "checked" : ""}>${esc(o)}</label>`).join("")
         : '<span class="muted">No other mods installed.</span>'}</div></div>
     <div class="row"><button class="btn primary" id="mf-save">${icon("check")}${p.hasManifest ? "Save manifest" : "Create manifest"}</button>
@@ -1591,9 +1669,9 @@ async function testAlone(name) {
   const go = async () => {
     const err = await api.test_alone(name);
     if (err) { closeModal(); return toast(err, "bad"); }
-    const lerr = await api.launch();
+    const r = await openLauncher();
     closeModal();
-    lerr ? toast(lerr, "bad") : toast(`Testing ${name} alone — Kronos is opening`, "ok");
+    launchToast(r, `Testing ${name} alone. Click Play in the Kronos launcher`);
     refresh(); loadStudio();
   };
   if (!errors.length) return go();
@@ -1706,7 +1784,7 @@ async function saveEditor() {
   if (r.error) { toast(r.error, "bad"); return false; }
   S.ed.saved = text; S.ed.mtime = r.mtime;
   if ($("#ed-ta")) { renderEditor(); renderProblems(); }
-  toast("Saved — the previous version is backed up", "ok");
+  toast("Saved. The previous version is backed up", "ok");
   loadStudioList();
   return true;
 }
@@ -1844,7 +1922,7 @@ window.addEventListener("focus", async () => {
   Object.assign(S.ed, { saved: src, text: src });
   $("#ed-ta").value = src;
   renderEditor(); scheduleLint();
-  toast("Reloaded — the file was changed outside Kronos Plus", "info");
+  toast("Reloaded because the file was changed outside Kronos Plus", "info");
 });
 
 // ---------------------------------------------------------- live console
@@ -1902,7 +1980,7 @@ $("#np-btn").onclick = async () => {
     <div class="field"><label>File name (lowercase, used in code)</label><input class="input" id="np-name" placeholder="zm_my_mod"></div>
     <div class="field"><label>Title</label><input class="input" id="np-title" placeholder="My Mod"></div>
     <div class="field"><label>Author</label><input class="input" id="np-author" value="${esc(d.author || "")}"></div>
-    <div class="field"><label>Start from</label><select class="input" id="np-tpl"><option value="">Blank — runs once for each player</option>
+    <div class="field"><label>Start from</label><select class="input" id="np-tpl"><option value="">Blank (runs once for each player)</option>
       ${tpls.map(t => `<option>${esc(t)}</option>`).join("")}</select></div>
     <div class="field" id="np-numf" style="display:none"><label id="np-numl"></label><input class="input" id="np-num" type="number" min="0" step="100"></div>
     <div id="np-err" style="color:var(--bad);font-size:13px;min-height:18px"></div>
@@ -1921,10 +1999,82 @@ $("#np-btn").onclick = async () => {
       description: $("#np-title").value || "", mode, requires: [] }, $("#np-tpl").value, $("#np-num").value || 0);
     if (!r.ok) { $("#np-err").textContent = r.error; $("#np-go").disabled = false; return; }
     closeModal(); S.proj = name; S.projTab = "code";
-    toast(r.compiles ? "Project created — it compiles" : `Created, but: ${r.msg}`, r.compiles ? "ok" : "bad");
+    toast(r.compiles ? "Project created and it compiles" : `Created, but: ${r.msg}`, r.compiles ? "ok" : "bad");
     refresh(); loadStudio();
   };
 };
+
+// ---------------------------------------------------------- help report
+// Making the report runs the compile check, so the button says it's busy.
+async function copyHelpReport() {
+  const b = $("#help-copy"), label = b.innerHTML;
+  b.disabled = true; b.innerHTML = '<span class="spin"></span>Copying…';
+  const r = await api.copy_help_report();
+  b.disabled = false; b.innerHTML = label;
+  r.error ? toast(r.error, "bad") : toast("Help report copied. Paste it in the Kronos Discord", "ok");
+}
+$("#help-copy").onclick = copyHelpReport;
+$("#help-view").onclick = async () => {
+  modal(`<h2>Help report</h2><div class="body row"><span class="spin"></span>Putting it together…</div>`);
+  const r = await api.help_report();
+  if (r.error) { closeModal(); return toast(r.error, "bad"); }
+  modal(`<h2>Help report</h2><div class="body">This is exactly what gets copied.</div><pre class="code report">${esc(r.text)}</pre>
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="hr-copy">${icon("copy")}Copy</button></div>`);
+  $("#hr-copy").onclick = () => { closeModal(); copyHelpReport(); };
+};
+
+// ---------------------------------------------------------- full backups
+$("#setup-backup").onclick = async () => {
+  const b = $("#setup-backup"), label = b.innerHTML;
+  b.disabled = true; b.innerHTML = '<span class="spin"></span>Backing up…';
+  const r = await api.backup_setup();
+  b.disabled = false; b.innerHTML = label;
+  if (!r) return;
+  if (r.error) return toast(r.error, "bad");
+  toast(`Saved ${r.file}: ${r.mods} mods, ${r.assets} assets, ${r.packs} packs`, "ok");
+};
+$("#setup-restore").onclick = async () => {
+  const r = await api.pick_setup_backup();
+  if (!r) return;
+  if (r.error) return toast(r.error, "bad");
+  const ok = await confirmBox("Restore this backup?", `<span class="pill">${esc(r.file)}</span>
+    <ul><li>Made ${esc(r.made || "on an unknown date")}${r.version ? ` with Kronos Plus ${esc(r.version)}` : ""}</li>
+      <li>${r.mods} mods, ${r.assets} assets and ${r.packs} packs</li>${r.settings ? "<li>Kronos's settings.json</li>" : ""}<li>Your presets and mod names</li></ul>
+    Everything you have now gets replaced. Your current setup is backed up first, and the replaced files go to the Recycle Bin.`, "Restore");
+  if (!ok) return;
+  modal(`<h2>Restoring…</h2><div class="body row"><span class="spin"></span>Putting your backup back</div>`);
+  const res = await api.restore_setup();
+  closeModal();
+  if (res.error) return toast(res.error, "bad");
+  S.selected = null;
+  toast("Backup restored", "ok");
+  refresh();
+  if ($("#page-settings.active")) loadSettings();
+};
+
+// ---------------------------------------------------------- what's new
+// Release notes are Markdown; headings, bullets, bold and code are all they use.
+function notesHtml(md) {
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  let html = "", list = false;
+  for (const raw of String(md || "").split(/\r?\n/)) {
+    const line = raw.trim(), item = line.match(/^[-*]\s+(.*)/), head = line.match(/^#{1,4}\s+(.*)/);
+    if (list && !item) { html += "</ul>"; list = false; }
+    if (item) { if (!list) { html += "<ul>"; list = true; } html += `<li>${inline(item[1])}</li>`; }
+    else if (head) html += `<h4>${inline(head[1])}</h4>`;
+    else if (line) html += `<p>${inline(line)}</p>`;
+  }
+  return html + (list ? "</ul>" : "");
+}
+// Shown once, the first time a new version opens.
+async function showWhatsNew() {
+  const w = await api.whats_new();
+  if (!w || $("#overlay").classList.contains("show")) return;
+  modal(`<h2>What's new in ${esc(w.version)}</h2><div class="body">Kronos Plus updated. Here's what changed.</div>
+    ${w.notes ? `<div class="notes">${notesHtml(w.notes)}</div>` : ""}
+    <div class="actions"><button class="btn ghost" id="wn-more">Full notes on GitHub</button><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
+  $("#wn-more").onclick = () => api.open_release_page();
+}
 
 // ---------------------------------------------------------- updates
 // The button under the theme switch always says where things stand; click it to check again.
@@ -1946,7 +2096,7 @@ async function checkUpdate() {
 }
 async function updateNow() {
   const u = S.update;
-  const notes = u.notes ? `<div style="font-family:var(--mono);white-space:pre-wrap;max-height:220px;overflow:auto;background:var(--bg-2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12.5px">${esc(u.notes)}</div>` : "";
+  const notes = u.notes ? `<div class="notes">${notesHtml(u.notes)}</div>` : "";
   if (!await confirmBox(`Update to ${u.version}?`, `${notes}Kronos Plus closes, updates and opens again by itself. Your mods, presets and settings stay as they are.`, "Update now")) return;
   const btns = [$('#banners [data-act="update"]'), $("#update-side")].filter(Boolean);
   const labels = btns.map(b => b.innerHTML);
@@ -1959,6 +2109,7 @@ PackUI.init();
 window.addEventListener("pywebviewready", async () => {
   api = window.pywebview.api;
   await refresh();
+  showWhatsNew();
   checkUpdate();
   loadHealth();
   pollSession();

@@ -148,7 +148,7 @@ const PackUI = (() => {
     $("#pack-list").innerHTML = result.packs.length ? result.packs.map(pack => `<article class="card pk-card" data-pack="${esc(pack.id)}">
       <div class="row"><h3>${icon("folder")}${esc(pack.name)}</h3><span class="pk-state ${pack.enabled ? "on" : ""}">${pack.enabled ? "Enabled" : "Disabled"}</span></div>
       <p class="muted">${pack.mods} source mod(s) · ${pack.assets} asset(s) · ${pack.files.length} file(s)</p>
-      ${pack.conflicts.length ? `<p class="pk-conflict">${pack.conflicts.length} shared file(s) — pack priority selects the active version</p>` : ""}
+      ${pack.conflicts.length ? `<p class="pk-conflict">${pack.conflicts.length} shared file(s). Pack priority picks which version is used</p>` : ""}
       ${pack.modified.length ? `<p class="pk-conflict">${pack.modified.length} file(s) changed outside Kronos Plus</p>` : ""}
       <div class="row pk-actions"><button class="btn sm" data-action="toggle">${pack.enabled ? "Disable" : "Enable"}</button><button class="btn sm" data-action="details">Files &amp; conflicts</button>
         <button class="btn sm" data-action="update">${pack.source_post ? "Update from Discord" : "Link Discord post"}</button><button class="btn sm danger" data-action="uninstall">Uninstall pack</button></div></article>`).join("")
