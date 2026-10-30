@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kronos Plus</title>
+<meta name="description" content="A free companion app for Kronos, the offline BO7 Zombies mod. Manage, install, fix and make mods from one window.">
+<meta property="og:title" content="Kronos Plus 1.5">
+<meta property="og:description" content="A free companion app for Kronos, the offline BO7 Zombies mod. Manage, install, fix and make mods from one window.">
+<meta property="og:image" content="https://dellxcell.github.io/kronos-plus/icon.png">
+<meta property="og:url" content="https://dellxcell.github.io/kronos-plus/">
+<meta name="theme-color" content="#ff7a2f">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column like the app's own dark panels: brand header, what's new, then the two feature lists. */
+:root {
+  color-scheme: dark;
+  --bg: #0d0f13;
+  --panel: #171a21;
+  --line: #262b35;
+  --text: #e9ecf1;
+  --muted: #9aa3b2;
+  --accent: #ff7a2f;
+  --accent-hi: #ffb347;
+  --accent-soft: rgba(255, 122, 47, .1);
+  --info: #6aa8ff;
+  --ok: #3ccf7f;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 40px;
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 40px; }
+header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+header svg { width: 72px; height: 72px; flex: none; }
+h1 { font: 700 44px/1 var(--display); margin: 0; letter-spacing: .5px; text-wrap: balance; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 .plus { color: var(--accent); }
+h1 .ver { font: 600 14px var(--mono); color: var(--accent-hi); border: 1px solid rgba(255, 122, 47, .4); background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; letter-spacing: 0; }
+.tag { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+.promise { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.promise span { font: 500 12px var(--mono); padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.promise span::before { content: "✓ "; color: var(--ok); }
+.cta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 16px; }
+a.get { font: 600 14px var(--body); color: #1a0d05; text-decoration: none; background: linear-gradient(135deg, var(--accent-hi), var(--accent)); border-radius: 10px; padding: 10px 16px; }
+a.src { font: 500 14px var(--body); color: var(--text); text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 9px 15px; }
+a.src:hover { border-color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.get-note { color: var(--muted); font-size: 13px; }
+.new { border: 1px solid rgba(255, 122, 47, .35); border-radius: 14px; padding: 20px 22px; background: linear-gradient(135deg, rgba(255, 179, 71, .08), rgba(255, 122, 47, .03) 60%), var(--panel); }
+.new .feats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); column-gap: 32px; }
+.new .feats li { border-left-color: var(--accent); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 32px; }
+.cols > section { min-width: 0; }
+h2 { font: 600 13px var(--display); text-transform: uppercase; letter-spacing: 2px; color: var(--accent-hi); margin: 0 0 4px; }
+.where { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+ul.feats { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.feats li { display: grid; gap: 2px; padding-left: 14px; border-left: 2px solid var(--line); min-width: 0; }
+.feats b { font-weight: 600; }
+.feats span { color: var(--muted); font-size: 14px; }
+.start { display: grid; gap: 10px; }
+.start ol { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 6px; }
+.start ol b { color: var(--text); font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+footer a { color: var(--muted); }
+footer a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <defs><linearGradient id="kp-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset=".55" stop-color="#ff7a2f"/><stop offset="1" stop-color="#d6431a"/></linearGradient></defs>
+      <rect width="64" height="64" rx="15" fill="url(#kp-bg)"/>
+      <g fill="none" stroke="#1a0d05" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15v35"/><path d="M36 15 19 33"/><path d="M24 28l14 22"/></g>
+      <g stroke="#fff" stroke-width="5" stroke-linecap="round"><path d="M50 12v14M43 19h14"/></g>
+    </svg>
+    <div style="min-width:0;flex:1">
+      <h1><span>Kronos <span class="plus">Plus</span></span><span class="ver">1.5</span></h1>
+      <p class="tag">A free companion app for Kronos, the offline BO7 Zombies mod. Manage, install, fix and make mods from one window.</p>
+      <div class="promise"><span>Works with files only</span><span>No login, no bot</span><span>Steam install stays clean</span><span>Updates itself</span></div>
+      <div class="cta">
+        <a class="get" href="https://github.com/DellxCell/kronos-plus/releases/latest">Download for Windows</a>
+        <a class="src" href="https://github.com/DellxCell/kronos-plus">Source code</a>
+        <span class="get-note">Already on 1.2 or newer? Click Update now in the app.</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="new">
+    <h2>New in 1.5</h2>
+    <p class="where">Mods &amp; assets from Discord, plus the new Assets and Packs pages</p>
+    <ul class="feats">
+      <li><b>Mods &amp; assets from Discord</b><span>Paste a #mods or #assets post link and it finds the files in that post through your open Discord app. No bot, no login.</span></li>
+      <li><b>Assets</b><span>Browse every image, Lua and other asset with previews. Filter by folder, add new ones, delete what you don't want.</span></li>
+      <li><b>Packs</b><span>Every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post.</span></li>
+      <li><b>Profiles</b><span>Save your whole setup, mods, packs and their order, and switch in one click.</span></li>
+      <li><b>Multi-file installs</b><span>Pick several files or Discord attachments and install them as one pack.</span></li>
+      <li><b>Right-click menu</b><span>Turn a mod on or off, edit it, open its folder or delete it to the Recycle Bin.</span></li>
+    </ul>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2>For players</h2>
+      <p class="where">Mods, Troubleshoot, Play history, Settings, Logs, Health check</p>
+      <ul class="feats">
+        <li><b>Mod manager</b><span>Turn mods on and off, search, save presets, undo any change.</span></li>
+        <li><b>Add mods and packs</b><span>Drop in .gsc files, assets or a whole .zip pack, safety-checked first.</span></li>
+        <li><b>Check before you play</b><span>Every mod is compiled with Kronos's own compiler before the game opens.</span></li>
+        <li><b>Safe mode</b><span>All mods off in one click, back on when you're done.</span></li>
+        <li><b>Find the crashing mod</b><span>A guided search that narrows it down for you.</span></li>
+        <li><b>Crash suspects and play history</b><span>Time played, crashes, and which mods were on when the game crashed.</span></li>
+        <li><b>Settings editor</b><span>Kronos's gameplay options, your name and keys, with backups.</span></li>
+        <li><b>Logs</b><span>Kronos's logs and crash reports, with errors highlighted.</span></li>
+        <li><b>Health check</b><span>Kronos set up right, Steam folder clean, BO7 update warnings, mod conflicts.</span></li>
+      </ul>
+    </section>
+    <section>
+      <h2>For modders</h2>
+      <p class="where">Turn on Developer mode in Settings</p>
+      <ul class="feats">
+        <li><b>Studio</b><span>Start a new mod from a template in seconds.</span></li>
+        <li><b>Code editor</b><span>GSC highlighting, autocomplete, auto-indent and automatic backups.</span></li>
+        <li><b>Live problem checking</b><span>Catches loops with no wait, a missing #using and more as you type.</span></li>
+        <li><b>Compile check</b><span>Uses Kronos's own compiler. Errors jump to the line.</span></li>
+        <li><b>Test alone</b><span>Play with only your mod, then your setup comes back by itself.</span></li>
+        <li><b>Manifests</b><span>Version, author and requirements, with missing ones flagged.</span></li>
+        <li><b>Live console</b><span>Launcher log, crashes and match results as they happen.</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="start">
+    <h2>Get started</h2>
+    <ol>
+      <li>Set up <b>Kronos</b> and run its launcher at least once.</li>
+      <li>Download the zip, unzip the <b>whole Kronos Plus folder</b> and run <b>Kronos Plus.exe</b>.</li>
+      <li>Windows may say "Windows protected your PC" because the app isn't code-signed. Click <b>More info → Run anyway</b>.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <span>Windows 10 or 11</span>
+    <span>Every release is built by GitHub straight from the <a href="https://github.com/DellxCell/kronos-plus">public code</a></span>
+    <span>Fan-made. Not affiliated with the Kronos team or Activision.</span>
+  </footer>
+</main>
+</body>
+</html>
