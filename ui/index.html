@@ -690,7 +690,7 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
     </div>
     <div class="spacer"></div>
     <span class="chip"><span class="dot" id="live-dot"></span><span id="live-text">Not playing</span></span>
-    <button class="btn primary play" id="play-btn"><svg><use href="#i-play"/></svg>Play</button>
+    <button class="btn primary play" id="play-btn" title="Opens Kronos's launcher. Click Play there to start the game"><svg><use href="#i-play"/></svg>Open launcher</button>
   </header>
   <div id="banners"></div>
 
@@ -1195,12 +1195,21 @@ const DISCORD_FILE = /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\/
 const DISCORD_MESSAGE = /^https:\/\/(\w+\.)?discord(app)?\.com\/channels\//;
 // Pasted links start downloading right away; typed ones wait for the Download button.
 function linkInstall(...args) { return PackUI.linkInstall(...args); }
-// Pasting a Discord link anywhere starts an install: focus is usually in the search box or
-// on a mod's switch, so only the code editor and open dialogs keep a pasted link as text.
+// Links and files copied from Explorer share one importer. The inspected file decides
+// whether this is a mod, asset, or mixed pack, regardless of the current page.
 document.addEventListener("paste", e => {
   if (e.target.closest("textarea, [contenteditable]") || $("#overlay").classList.contains("show")) return;
   const text = (e.clipboardData?.getData("text") || "").trim();
-  if (DISCORD_FILE.test(text) || DISCORD_MESSAGE.test(text)) { e.preventDefault(); linkInstall(text, true); }
+  if (DISCORD_FILE.test(text) || DISCORD_MESSAGE.test(text)) { e.preventDefault(); linkInstall(text, true); return; }
+  if (e.clipboardData?.files?.length || [...(e.clipboardData?.types || [])].includes("Files")) e.preventDefault();
+  PackUI.pasteFiles();
+});
+
+// Some Windows/WebView2 versions do not dispatch a paste event for CF_HDROP files.
+document.addEventListener("keydown", e => {
+  if (!e.ctrlKey || e.altKey || e.shiftKey || e.key.toLowerCase() !== "v" || e.repeat) return;
+  if (e.target.closest("textarea, [contenteditable]") || $("#overlay").classList.contains("show")) return;
+  PackUI.pasteFiles();
 });
 
 async function addMods(...args) { return PackUI.addMods(...args); }
@@ -1520,7 +1529,7 @@ $("#play-btn").onclick = async () => {
   const launch = async () => { const r = await openLauncher(); closeModal(); launchToast(r); };
   if (!problems.length) return launch();
   modal(`<h2>Before you play</h2><div class="body">Found ${problems.length} thing${problems.length > 1 ? "s" : ""} to check:<ul>${problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>
-    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Play anyway</button></div>`);
+    <div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="play-anyway">${icon("play")}Open anyway</button></div>`);
   $("#play-anyway").onclick = launch;
 };
 $("#theme-btn").onclick = async () => { await api.set_theme(!S.ov.dark); refresh(); };

@@ -1,5 +1,6 @@
 const PackUI = (() => {
   let activePlan = null;
+  let clipboardRequest = null;
   let library = { packs: [], profiles: {} };
   const request = async (method, ...args) => {
     try { return await api[method](...args); }
@@ -25,7 +26,7 @@ const PackUI = (() => {
     const field = $("#ln-url"), button = $("#ln-go"), pick = $("#ln-pick"), error = $("#ln-err");
     let generation = 0;
     const busy = (on, text = "Downloading…") => { button.disabled = on; button.textContent = on ? text : "Download"; };
-    const discard = result => { if (result?.job) request("cancel_post_link", result.job); if (result?.token) request("cancel_plan", result.token); };
+    const discard = result => { if (result?.job) request("cancel_post_link", result.job); if (result?.token) request("cancel_plan", result.token); if (result?.plan?.token) request("cancel_plan", result.plan.token); };
     async function download(urls, source) {
       const current = ++generation;
       busy(true); error.textContent = "";
@@ -48,6 +49,29 @@ const PackUI = (() => {
         download(urls, source);
       };
     }
+    async function startPostDownload(pending, indices) {
+      pending.selectionSent = true;
+      busy(true, "Downloading…");
+      pick.innerHTML = `<p id="ln-post-status"><span class="spin"></span> Starting the attachment download…</p>`;
+      const result = await request("select_post_attachments", pending.id, indices, updateId);
+      if (pendingPostImport !== pending || !field.isConnected) { discard(result); return; }
+      if (result?.error) { stopPostImport(); pick.innerHTML = ""; error.textContent = result.error; busy(false); }
+    }
+    async function choosePost(pending, post) {
+      if (pending.awaitingSelection || pending.selectionSent) return;
+      const files = [...(post.files || []), ...(post.previews || [])];
+      if (files.length === 1) { await startPostDownload(pending, [0]); return; }
+      pending.awaitingSelection = true;
+      const matches = files.map((file, index) => attachmentNames.includes(file.name) ? index : -1).filter(index => index >= 0);
+      const selected = new Set((matches.length ? matches : files.map((_, index) => index)).slice(0, 20));
+      pick.innerHTML = `<p class="muted">Select up to 20 attachments. Code previews download automatically too.</p><div class="pk-file-list">${files.map((file, index) => `<label class="pk-attachment"><input type="checkbox" data-index="${index}" ${selected.has(index) ? "checked" : ""}><span>${esc(file.name)}</span></label>`).join("")}</div>`;
+      button.disabled = false; button.textContent = "Download selected";
+      button.onclick = () => {
+        const indices = $$("#ln-pick input:checked").map(input => Number(input.dataset.index));
+        if (!indices.length || indices.length > 20) { error.textContent = "Select between 1 and 20 attachments."; return; }
+        startPostDownload(pending, indices);
+      };
+    }
     async function get(link) {
       stopPostImport(); pick.innerHTML = "";
       const current = ++generation;
@@ -65,10 +89,36 @@ const PackUI = (() => {
           if (pendingPostImport !== pending || !field.isConnected || pending.polling) return;
           pending.polling = true;
           try {
-            const post = await request("post_link_status", pending.id);
-            if (pendingPostImport !== pending || !field.isConnected) return;
+            const post = await request("post_link_status", pending.id, updateId);
+            if (pendingPostImport !== pending || !field.isConnected) { if (post?.plan) discard(post.plan); return; }
             if (post.error || ["error", "cancelled"].includes(post.status) || (post.status === "empty" && !post.waiting)) {
               stopPostImport(); pick.innerHTML = ""; error.textContent = post.error || post.message || "Post lookup stopped.";
+            } else if (post.status === "downloaded") {
+              installPack(post.plan, true);
+            } else if (post.status === "downloading") {
+              button.disabled = true; button.textContent = "Downloading…";
+              if (!$("#ln-post-status")) pick.innerHTML = `<p id="ln-post-status"></p>`;
+              $("#ln-post-status").textContent = post.message;
+            } else if (post.status === "needs_file") {
+              if (!pending.fallbackShown) {
+                pending.fallbackShown = true;
+                pick.innerHTML = `<p id="ln-post-status"></p><div class="pk-file-list">${(post.previews || []).map(file => `<div>${esc(file.name)}</div>`).join("")}</div>`;
+                button.disabled = false;
+                button.textContent = "Choose downloaded file…";
+                button.onclick = async () => {
+                  if (pending.polling) return;
+                  pending.polling = true; button.disabled = true;
+                  try {
+                    const plan = await request("pick_preview_download", pending.id, updateId);
+                    if (pendingPostImport !== pending || !field.isConnected) { discard(plan); return; }
+                    if (plan?.error) error.textContent = plan.error;
+                    else if (plan) installPack(plan, true);
+                  } finally { pending.polling = false; if (button.isConnected) button.disabled = false; }
+                };
+              }
+              $("#ln-post-status").textContent = post.message;
+            } else if (post.status === "preview" || (post.status === "ready" && post.previews?.length)) {
+              await choosePost(pending, post);
             } else if (post.status === "ready") {
               choose(post.files, post.post_url || link);
             } else $("#ln-post-status").textContent = post.message || "Waiting for the selected post…";
@@ -98,23 +148,48 @@ const PackUI = (() => {
     if (!failed(result)) installPack(result);
   }
 
+  function pasteFiles() {
+    if (clipboardRequest) return clipboardRequest;
+    clipboardRequest = (async () => {
+      const result = await request("prepare_clipboard_files");
+      if (!result || failed(result)) return false;
+      // A file review must not replace another dialog opened while the file was being read.
+      if ($("#overlay").classList.contains("show")) {
+        await request("cancel_plan", result.token);
+        return false;
+      }
+      await installPack(result);
+      return true;
+    })().finally(() => { clipboardRequest = null; });
+    return clipboardRequest;
+  }
+
   async function installPack(plan, fromLink = false) {
     plan = plan || await request("pick_pack");
     if (!plan || failed(plan)) return;
     const mods = plan.mods || [], assets = plan.assets || [];
-    modal(`<h2>${plan.update_id ? "Update" : "Install"} pack</h2>
+    const kind = plan.content_kind || (mods.length && assets.length ? "mixed" : assets.length ? "assets" : mods.length ? "mods" : "empty");
+    const assetCount = plan.detected_asset_count ?? assets.length;
+    const noun = kind === "mods" ? mods.length === 1 ? "mod" : "mods" : kind === "assets" ? assetCount === 1 ? "asset" : "assets" : "pack";
+    const targetPage = plan.content_page || (kind === "assets" ? "assets" : kind === "mods" ? "mods" : "packs");
+    const detected = [mods.length ? `${mods.length} GSC mod${mods.length === 1 ? "" : "s"}` : "", assetCount ? `${assetCount} asset${assetCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ");
+    const folderFields = (plan.destinations || []).map(item => `<div class="field"><label>${esc(item.name)} destination</label><select class="input pk-destination" data-index="${esc(item.index)}"><option value="">Choose a folder…</option>${item.folders.map(folder => `<option value="${esc(folder)}" ${item.selected === folder ? "selected" : ""}>Assets/${esc(folder)}</option>`).join("")}</select></div>`).join("");
+    go(targetPage);
+    modal(`<h2>${plan.update_id ? "Update" : "Install"} ${noun}</h2>
       <div class="field"><label for="pk-name">Pack name</label><input class="input" id="pk-name" maxlength="120" value="${esc(plan.reviewName || plan.name)}"></div>
       <div class="body">
-        ${(plan.destinations || []).map(item => `<div class="field"><label>${esc(item.name)} destination</label><select class="input pk-destination" data-index="${esc(item.index)}"><option value="">Choose a folder…</option>${item.folders.map(folder => `<option value="${esc(folder)}" ${item.selected === folder ? "selected" : ""}>Assets/${esc(folder)}</option>`).join("")}</select></div>`).join("")}
-        <p><b>${mods.length} source mod(s), ${assets.length} asset(s)</b></p>${fileList(plan.files || [])}
-        ${plan.unresolved ? `<p class="muted">Choose each asset's destination before installing.</p>` : ""}
+        <p><b>${detected ? `Detected automatically: ${detected}` : "No supported files found"}</b></p>
+        ${mods.length ? `<p class="muted">GSC mods go into custom_scripts.</p>` : ""}
+        ${assets.length ? `<p class="muted">Asset folders were detected from the files${kind === "mixed" ? "; both types will be installed together" : ""}.</p>` : ""}
+        ${plan.unresolved ? `<p class="muted">This is an asset, but its file type fits several folders. Choose its destination to continue.</p>${folderFields}` : folderFields ? `<details class="pk-review-details"><summary>Change asset folders</summary>${folderFields}</details>` : ""}
+        ${kind === "mixed" ? `<h3>Mods</h3>${fileList(mods)}<h3>Assets</h3>${fileList(assets)}` : fileList(plan.files || [])}
         ${plan.conflicts?.length ? `<details class="pk-review-details"><summary>Shared or existing files (${plan.conflicts.length})</summary><div class="pk-file-list">${plan.conflicts.map(item => `<div><b>${esc(item.path)}</b><small>Current: ${esc(item.active)}${item.owners.length ? ` · Packs: ${esc(item.owners.join(", "))}` : ""}${item.same ? " · Identical content" : ""}</small></div>`).join("")}</div></details>` : ""}
         ${plan.removed?.length ? `<details class="pk-review-details"><summary>${plan.removed.length} file(s) removed by this update</summary>${fileList(plan.removed)}</details>` : ""}
         ${plan.bad?.length ? `<details class="pk-review-details"><summary>Skipped files (${plan.bad.length})</summary><div class="pk-file-list">${plan.bad.map(text => `<div>${esc(text)}</div>`).join("")}</div></details>` : ""}
         ${plan.existing?.length ? `<label class="pk-attachment"><input type="checkbox" id="pk-over"><span>Replace ${plan.existing.length} existing file(s); originals are retained</span></label>` : ""}
         ${mods.length ? `<label class="pk-attachment"><input type="checkbox" id="pk-preset"><span>Also save source mods as a preset</span></label>` : ""}
         <p class="muted">You can disable or uninstall the complete pack from Packs.</p></div>
-      <div class="pk-error" id="pk-error"></div><div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="pk-go" ${!plan.files?.length || plan.unresolved ? "disabled" : ""}>${plan.update_id ? "Update pack" : "Install pack"}</button></div>`, plan.token);
+      <div class="pk-error" id="pk-error"></div><div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="pk-go" ${!plan.files?.length || plan.unresolved ? "disabled" : ""}>${plan.update_id ? "Update" : "Install"} ${noun}</button></div>`, plan.token);
     let revision = 0;
     $$(".pk-destination").forEach(select => select.onchange = async () => {
       const current = ++revision;
@@ -128,6 +203,7 @@ const PackUI = (() => {
       const button = $("#pk-go"), error = $("#pk-error"); button.disabled = true;
       const result = await request("install_pack", plan.token, $("#pk-over")?.checked ? plan.existing : [], $("#pk-preset")?.checked || false, $("#pk-name").value);
       if (result?.error) { if (error.isConnected) { error.textContent = result.error; button.disabled = false; } return; }
+      if (result.assets) AS.openGroups.add("managed:" + result.id);
       activePlan = null; closeModal(); await refresh();
       modal(`<h2>${plan.update_id ? "Updated" : "Installed"} “${esc(result.name)}”</h2><div class="body"><p>${result.mods} source mod(s) and ${result.assets} asset(s) in this pack.${result.skipped ? ` ${result.skipped} existing file(s) skipped.` : ""}</p>
         ${result.recovery ? `<p>Changes made outside Kronos Plus were retained in:<br><span class="muted">${esc(result.recovery)}</span></p>` : ""}${result.warning ? `<p>${esc(result.warning)}</p>` : ""}</div>
@@ -232,5 +308,5 @@ const PackUI = (() => {
       if (!failed(await request("delete_full_profile", name))) load();
     };
   }
-  return { init, load, details, linkInstall, installPack, addMods, onModal, release: () => onModal(null) };
+  return { init, load, details, linkInstall, installPack, addMods, pasteFiles, onModal, release: () => onModal(null) };
 })();
