@@ -18,7 +18,7 @@ import PyInstaller.__main__
 from kronos_qol import APP_VERSION as VER  # the one place the version is set
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = tuple(int(n) for n in VER.split(".")) + (0, 0)
+VERSION = tuple(int(n) for n in (VER.split(".") + ["0"] * 4)[:4])
 NAME = "Kronos Plus"
 CONSOLE = "--console" in sys.argv
 DIST = os.path.join(HERE, "dist-console" if CONSOLE else "dist")
@@ -44,6 +44,9 @@ try:
         "--name", NAME,
         "--onedir",
         "--console" if CONSOLE else "--windowed",
+        "--paths", os.path.join(HERE, "vendor") if os.path.isdir(os.path.join(HERE, "vendor")) else os.path.join(os.path.dirname(HERE), "vendor"),
+        "--hidden-import", "comtypes.gen.UIAutomationClient",
+        "--collect-submodules", "comtypes.gen",
         "--noupx",  # packed exes look suspicious to antivirus
         "--icon", os.path.join(HERE, "kronos_plus.ico"),
         "--version-file", os.path.join(work, "version.txt"),
@@ -56,7 +59,12 @@ try:
         "--clean",
     ])
 finally:
-    shutil.rmtree(work, ignore_errors=True)
+    # Delete only the exact temporary build tree created above.
+    resolved_work = os.path.realpath(work)
+    temp_root = os.path.realpath(tempfile.gettempdir())
+    if os.path.dirname(resolved_work) != temp_root or not os.path.basename(resolved_work).startswith("kp-build-"):
+        raise RuntimeError("Refusing cleanup outside the temporary build directory")
+    shutil.rmtree(resolved_work, ignore_errors=True)
 
 if not CONSOLE:
     app_dir = os.path.join(DIST, NAME)

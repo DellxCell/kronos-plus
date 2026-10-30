@@ -4,7 +4,7 @@
 
 A companion app for **Kronos**, the offline BO7 Zombies mod. Manage, fix and make mods from one window.
 
-It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. It only goes online to install a mod from a Discord link, and to ask GitHub if there's a new version.
+It only works with files on your PC: it never touches the game while it runs and keeps your Steam install clean. It only goes online to install mods and assets from Discord, and to ask GitHub if there's a new version. It never asks for your Discord login: it reads the post you open in your own Discord app.
 
 ## Download
 
@@ -20,8 +20,11 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 
 **For players**
 - Mod manager: turn mods on/off, save presets, undo any change
-- Install from Discord: copy a mod's file link in Discord, press Ctrl+V in Kronos Plus, done (safety-checked first)
-- Add mods & packs: drop in .gsc files or install a whole pack in one click
+- Install from Discord: paste a #mods or #assets post link (or a file link) and it finds the files for you (safety-checked first)
+- Assets: browse Kronos's images, Lua and other assets with previews, add new ones, delete what you don't want
+- Packs: every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post
+- Profiles: save your whole setup, mods and packs, and switch in one click
+- Add mods & packs: drop in .gsc files, assets or a whole .zip pack
 - Check before you play: every mod is compiled and checked before the game opens
 - Safe mode: all mods off in one click, back on when you're done
 - Find the crashing mod: a guided search that narrows it down for you
@@ -51,3 +54,5 @@ python app.py
 ```
 
 Build the release zip yourself with `python build_exe.py` (output in `dist/`).
+
+`vendor/comtypes` is a copy of [comtypes](https://github.com/enthought/comtypes) 1.4.17 (MIT, see `vendor/comtypes-LICENSE.txt`) with its Windows UI Automation bindings already generated, used to read the Discord post you have open.

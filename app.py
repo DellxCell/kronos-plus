@@ -11,7 +11,19 @@ import subprocess
 import sys
 import urllib.parse
 
+# The accessibility reader is an isolated, read-only child, not another app window.
+if len(sys.argv) == 4 and sys.argv[1] == "--read-discord-post":
+    base = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (os.path.join(base, "vendor"), os.path.join(os.path.dirname(base), "vendor")):
+        if os.path.isdir(candidate):
+            sys.path.insert(0, candidate)
+            break
+    from discord_posts import helper_main
+    raise SystemExit(helper_main(sys.argv[2], sys.argv[3]))
+
 import kronos_qol as core
+from discord_posts import DesktopPostImporter
+from pack_services import PackServices, source_link
 
 if getattr(sys, "frozen", False):
     # The windowed .exe has no console: without this, the first print or log line crashes it.
@@ -32,6 +44,7 @@ if getattr(sys, "frozen", False):
 UI = os.path.join(core.APP_DIR, "ui", "index.html")
 ICON = os.path.join(core.APP_DIR, "kronos_plus.ico")
 TITLE = "Kronos Plus"
+ASSETS_FORUM = "1564034358094864515/1564893868724588645"
 MODS_FORUM = "1564034358094864515/1564893232985415700"  # Kronos Discord server / #mods forum
 
 
@@ -108,11 +121,25 @@ class Api:
         self._window = None
         self._update = None
         self._updating = False
+        self._post_importer = DesktopPostImporter(open_discord, os.path.abspath(__file__))
+        self._packs = PackServices(core, self._state)
 
     # ---------------------------------------------------------- helpers
 
     def _dialog(self, kind, **kw):
         return self._window.create_file_dialog(kind, **kw)
+
+    def _pack_services(self):
+        if not hasattr(self, "_packs"):
+            self._packs = PackServices(core, self._state)
+        return self._packs
+
+    def _pack_call(self, method, *args):
+        import zipfile
+        try:
+            return method(*args)
+        except (ValueError, OSError, zipfile.BadZipFile) as error:
+            return {"error": str(error) or "The pack operation couldn't finish."}
 
     # ---------------------------------------------------------- overview
 
@@ -141,6 +168,8 @@ class Api:
             "mods": mods,
             "enabledCount": sum(m["enabled"] for m in mods),
             "gameDir": core.game_dir(),
+            "modsForumUrl": "https://discord.com/channels/" + MODS_FORUM,
+            "assetsForumUrl": "https://discord.com/channels/" + ASSETS_FORUM,
             "presets": sorted(s["presets"]),
             "presetMods": s["presets"],
             "banners": banners,
@@ -150,6 +179,8 @@ class Api:
             "dark": s["dark"],
             "devMode": s["dev_mode"],
             "appVersion": core.APP_VERSION,
+            "assetCount": len(core.list_assets()),
+            "packCount": len(self._pack_services().snapshot()["packs"]),
             "testAlone": s.get("test_alone"),
             "playMinutes": total,
             "sessionCount": len(s["sessions"]),
@@ -196,11 +227,26 @@ class Api:
         if not names:
             return
         core.record_history(self._state, f"Turned {'on' if enabled else 'off'} {', '.join(names)}")
-        for n in names:
-            core.set_mod_enabled(n, enabled)
+        return self._pack_call(self._pack_services().manager.set_mods, names, enabled)
 
     def undo(self):
-        return core.undo_last(self._state)
+        if not self._state["history"]:
+            return None
+        previous = self._state["history"][-1]
+        result = self._pack_call(self._pack_services().manager.set_all_mods, previous["before"])
+        if isinstance(result, dict) and result.get("error"):
+            return result
+        self._state["history"].pop()
+        core.save_state(self._state)
+        return previous["action"]
+
+    def delete_mod(self, name):
+        """Returns an error message or None."""
+        try:
+            core.delete_mod(name)
+        except ValueError as e:
+            return str(e)
+        return None
 
     def source(self, name):
         p = core.mod_path(name)
@@ -250,41 +296,47 @@ class Api:
         return {"path": p, "name": os.path.basename(p), "problem": problem, "exists": exists}
 
     def import_files(self, paths, overwrite):
-        core.record_history(self._state, "Added mods")
-        msgs = []
-        for p in paths:
-            ok, msg = core.import_mod(p, overwrite=os.path.basename(p) in overwrite)
-            msgs.append(msg if ok else f"{os.path.basename(p)}: {'skipped (already exists)' if msg == 'exists' else msg}")
-            core.forget_download(p)
-        return msgs
+        def install():
+            plan = self._pack_services().prepare(paths)
+            result = self._pack_services().install(plan["token"], overwrite, plan["name"])
+            return [f"Added {path}." for path in result["installed"]]
+        return self._pack_call(install)
 
-    def link_mod(self, url):
-        """Download a mod or pack from a Discord file or post link; the page then shows the usual install steps.
+    def prepare_files(self, paths):
+        return self._pack_call(self._pack_services().prepare, paths)
 
-        A post with several mod files returns {"kind": "choose"} so the page can ask which one.
-        """
-        import zipfile
-        try:
+    def link_mod(self, url, source_post=None, update_id=None):
+        def resolve():
             if core.is_post_link(url):
-                if not core.POST_HELPER:
-                    return {"kind": "post"}  # the page opens the post and waits for a copied file link
-                post = core.post_files(url)
-                if not post["files"]:
-                    others = f" It only has {', '.join(post['other'])}." if post.get("other") else ""
-                    return {"error": f"“{post.get('title', 'That post')}” has no .zip or .gsc mod file.{others}"}
-                if len(post["files"]) > 1:
-                    return dict(post, kind="choose")
-                url = post["files"][0]["url"]
-            p = core.download_mod_link(url)
-        except ValueError as e:
-            return {"error": str(e)}
-        if p.lower().endswith(".gsc"):
-            return {"kind": "gsc", "files": [self._describe_file(p)]}
-        try:
-            return dict(self._describe_pack(p), kind="pack")
-        except zipfile.BadZipFile:
-            core.forget_download(p)
-            return {"error": "That download isn't a valid .zip file."}
+                if core.POST_HELPER:
+                    return dict(core.post_files(url), kind="choose")
+                return {"kind": "post", "job": self._post_importer.begin(url)}
+            return dict(self._pack_services().download([url], source_post, update_id), kind="pack")
+        return self._pack_call(resolve)
+
+    def link_files(self, urls, source_post=None, update_id=None):
+        return self._pack_call(self._pack_services().download, urls, source_post, update_id)
+
+    def revise_plan(self, token, folders):
+        return self._pack_call(self._pack_services().revise, token, folders)
+
+    def cancel_plan(self, token):
+        self._pack_services().forget(token)
+
+    def post_link_status(self, job):
+        """Attachment discovery in the existing Discord window; no account token is read."""
+        result = self._post_importer.status(job)
+        if result.get("status") == "ready" and self._window:
+            try:
+                self._window.restore()
+                self._window.on_top = True
+                self._window.on_top = False
+            except Exception:
+                pass
+        return result
+
+    def cancel_post_link(self, job):
+        self._post_importer.cancel(job)
 
     def forget_link(self, path):
         core.forget_download(path)
@@ -299,6 +351,38 @@ class Api:
         os.makedirs(core.scripts_dir(), exist_ok=True)
         os.startfile(core.scripts_dir())
 
+    def open_assets_folder(self):
+        os.makedirs(core.assets_dir(), exist_ok=True)
+        os.startfile(core.assets_dir())
+
+    # ---------------------------------------------------------- assets
+
+    def assets(self):
+        return self._pack_services().assets()
+
+    def asset_thumbs(self, rels):
+        return core.asset_thumbs(list(rels or []))
+
+    def asset_preview(self, rel):
+        try:
+            return core.asset_preview(rel)
+        except (ValueError, OSError) as e:
+            return {"error": str(e)}
+
+    def show_asset(self, rel):
+        try:
+            subprocess.Popen(["explorer", "/select,", core.asset_file(rel)])
+        except (ValueError, OSError):
+            pass
+
+    def delete_asset(self, rel):
+        """Returns an error message or None."""
+        try:
+            core.delete_asset(rel, self._state)
+        except (ValueError, OSError) as e:
+            return str(e)
+        return None
+
     # ---------------------------------------------------------- presets
 
     def save_preset(self, name):
@@ -312,7 +396,7 @@ class Api:
     def apply_preset(self, name):
         if name in self._state["presets"]:
             core.record_history(self._state, f"Applied preset {name}")
-            core.apply_enabled_set(self._state["presets"][name])
+            return self._pack_call(self._pack_services().manager.set_all_mods, self._state["presets"][name])
 
     def delete_preset(self, name):
         self._state["presets"].pop(name, None)
@@ -333,31 +417,44 @@ class Api:
 
     def pick_pack(self):
         import webview
-        import zipfile
-        paths = self._dialog(webview.OPEN_DIALOG, file_types=("Mod pack (*.zip)",))
-        if not paths:
-            return None
-        try:
-            return self._describe_pack(paths[0])
-        except zipfile.BadZipFile:
-            return {"error": "That isn't a valid .zip file."}
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.gsc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
+        return self.prepare_files(list(paths)) if paths else None
 
-    def _describe_pack(self, p):
-        name, files, bad = core.read_pack(p)
-        existing = [b for b in files if os.path.exists(os.path.join(core.scripts_dir(), b))]
-        mods = sorted(b for b in files if b.lower().endswith(".gsc"))
-        return {"path": p, "name": name, "files": mods, "bad": bad, "existing": existing}
+    def _describe_pack(self, path, asset_folder=None):
+        return self._pack_services().prepare([path], {"0": asset_folder} if asset_folder else None)
 
-    def install_pack(self, path, overwrite, make_preset):
-        name, files, bad = core.read_pack(path)
-        core.forget_download(path)
-        core.record_history(self._state, f"Installed pack {name}")
-        core.install_pack_files(files, overwrite)
-        mods = [b[:-4] for b in files if b.lower().endswith(".gsc")]
-        if make_preset:
-            self._state["presets"][name] = mods
-            core.save_state(self._state)
-        return len(mods)
+    def preview_asset(self, token, folder):
+        return self.revise_plan(token, {"0": folder})
+
+    def install_pack(self, token, overwrite, make_preset=False, name=None):
+        return self._pack_call(self._pack_services().install, token, overwrite, name, make_preset)
+
+    def managed_packs(self):
+        return self._pack_call(self._pack_services().snapshot)
+
+    def pack_action_preview(self, identity, action):
+        return self._pack_call(self._pack_services().action_preview, identity, action)
+
+    def pack_action(self, identity, action):
+        return self._pack_call(self._pack_services().manager.change, identity, action)
+
+    def pack_source(self, identity, url):
+        def save():
+            self._pack_services().manager.set_source(identity, source_link(url))
+            return {"saved": True}
+        return self._pack_call(save)
+
+    def save_full_profile(self, name):
+        return self._pack_call(self._pack_services().manager.save_profile, name)
+
+    def apply_full_profile(self, name):
+        return self._pack_call(self._pack_services().manager.apply_profile, name)
+
+    def delete_full_profile(self, name):
+        def remove():
+            self._pack_services().manager.delete_profile(name)
+            return {"deleted": True}
+        return self._pack_call(remove)
 
     # ---------------------------------------------------------- troubleshoot
 
@@ -650,6 +747,8 @@ def main():
         background_color="#0f1115",
     )
     window.events.shown += set_window_icon
+    window.events.closed += api._post_importer.close
+    window.events.closed += api._pack_services().close
     api._window = window  # private: pywebview would otherwise crawl the whole window object
     try:
         webview.start(gui="edgechromium", debug="--debug" in sys.argv)

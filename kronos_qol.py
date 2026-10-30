@@ -8,6 +8,7 @@ Run:  python kronos_qol.py            (opens the window)
       python kronos_qol.py --selftest (prints what it finds, no window)
 """
 
+import base64
 import datetime
 import json
 import os
@@ -22,6 +23,8 @@ import urllib.parse
 import urllib.request
 import winreg
 import zipfile
+from discord_posts import parse_post_link
+import content_packs as content
 
 if getattr(sys, "frozen", False):
     # Packaged .exe: bundled files unpack to a temp folder, so state lives somewhere permanent.
@@ -106,7 +109,8 @@ def steam_manifest():
 
 DEFAULT_STATE = {"presets": {}, "last_buildid": None, "history": [], "sessions": [],
                  "safe_mode_saved": None, "bisect": None, "dark": True,
-                 "dev_mode": False, "test_alone": None, "launcher": None}
+                 "dev_mode": False, "test_alone": None, "launcher": None,
+                 "assets": {}}  # assets Kronos Plus installed: "Images/x.png" -> {"pack", "added"}
 
 
 def launcher_path(state):
@@ -191,22 +195,51 @@ def enabled_mods():
     return [n for n, on, _ in list_mods() if on]
 
 
+def _mod_files(name, folder):
+    """The .gsc plus any companions sharing its name (e.g. Mod Studio's .gscc and .bo7studio.json),
+    as paths relative to folder, including the compiled copy so a stale .gscc can't linger."""
+    files = [f for f in os.listdir(folder) if f.startswith(name + ".") and os.path.isfile(os.path.join(folder, f))]
+    if os.path.exists(os.path.join(folder, "compiled", name + ".gscc")):
+        files.append(os.path.join("compiled", name + ".gscc"))
+    return files
+
+
 def _move_mod(name, src, dst):
     os.makedirs(os.path.join(dst, "compiled"), exist_ok=True)
-    # The .gsc plus any companions sharing its name (e.g. Mod Studio's .gscc and .bo7studio.json).
-    for f in os.listdir(src):
-        if f.startswith(name + ".") and os.path.isfile(os.path.join(src, f)):
-            shutil.move(os.path.join(src, f), os.path.join(dst, f))
-    # Move the compiled copy too, so a stale .gscc can't linger in the live folder.
-    gscc = os.path.join(src, "compiled", name + ".gscc")
-    if os.path.exists(gscc):
-        shutil.move(gscc, os.path.join(dst, "compiled", name + ".gscc"))
+    for f in _mod_files(name, src):
+        shutil.move(os.path.join(src, f), os.path.join(dst, f))
 
 
 def set_mod_enabled(name, enabled):
     src, dst = (disabled_dir(), scripts_dir()) if enabled else (scripts_dir(), disabled_dir())
     if os.path.exists(os.path.join(src, name + ".gsc")):
         _move_mod(name, src, dst)
+
+
+def delete_mod(name):
+    """Send a mod and its companion files to the Recycle Bin (a copy of the .gsc also goes to backups)."""
+    p = mod_path(name) if name in {n for n, _, _ in list_mods()} else None
+    if not p:
+        raise ValueError(f"{name} isn't installed.")
+    folder = os.path.dirname(p)
+    backup_mod_file(p)
+    if not recycle([os.path.join(folder, f) for f in _mod_files(name, folder)]) or os.path.exists(p):
+        raise ValueError(f"Couldn't delete {name}. Is the file open in another program?")
+
+
+def recycle(paths):
+    """Send files to the Recycle Bin; False if Windows refused."""
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                    ("pTo", wintypes.LPCWSTR), ("fFlags", wintypes.WORD), ("fAnyOperationsAborted", wintypes.BOOL),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+
+    # FO_DELETE with FOF_ALLOWUNDO (Recycle Bin), no confirmation, progress or error dialogs.
+    op = SHFILEOPSTRUCTW(wFunc=3, pFrom="\0".join(paths) + "\0", fFlags=0x40 | 0x10 | 0x4 | 0x400)
+    return not ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) and not op.fAnyOperationsAborted
 
 
 def apply_enabled_set(names):
@@ -856,56 +889,134 @@ def export_pack(zip_path, pack_name):
     return included, skipped
 
 
-def read_pack(zip_path):
-    """Validate a mod pack without extracting. Returns (pack_name, {filename: bytes}, [rejected msgs])."""
-    good, bad, pack_name = {}, [], os.path.splitext(os.path.basename(zip_path))[0]
-    with zipfile.ZipFile(zip_path) as z:
-        for info in z.infolist():
-            if info.is_dir():
+_PACK_MANAGER = None
+
+
+def pack_library_dir():
+    import hashlib
+    location = os.path.normcase(os.path.realpath(kronos_dir()))
+    identity = hashlib.sha256(location.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Kronos Plus", "Pack Library", identity)
+
+
+def pack_manager():
+    from pack_manager import PackManager
+    global _PACK_MANAGER
+    paths = (scripts_dir(), assets_dir(), disabled_dir(), pack_library_dir())
+    if _PACK_MANAGER is None or getattr(_PACK_MANAGER, "_configuration", None) != paths:
+        _PACK_MANAGER = PackManager(*paths, manifest_suffix=MANIFEST_SUFFIX)
+        _PACK_MANAGER._configuration = paths
+    return _PACK_MANAGER
+
+
+def assets_dir():
+    return os.path.join(kronos_dir(), "Assets")
+
+
+MAX_ASSET_LIST = 5000
+PREVIEW_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".bmp": "image/bmp"}
+TEXT_PREVIEW_BYTES = 64 * 1024
+
+
+def list_assets():
+    """[{path, folder, name, size, modified}] for files in Kronos's Assets folder, paths relative to it.
+    Linked folders are skipped so the list never wanders outside Assets."""
+    root, out = assets_dir(), []
+    if not os.path.isdir(root):
+        return out
+    for here, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not os.path.islink(os.path.join(here, d))
+                         and not getattr(os.lstat(os.path.join(here, d)), "st_file_attributes", 0) & 0x400)
+        for f in sorted(files, key=str.lower):
+            p = os.path.join(here, f)
+            if f.startswith(".kp-install-") or os.path.islink(p):
                 continue
-            base = os.path.basename(info.filename)
-            if base == PACK_INFO:
-                try:
-                    pack_name = json.loads(z.read(info)).get("name") or pack_name
-                except ValueError:
-                    pass
-                continue
-            # Mods shared online are often zipped inside folders: take each file by its own name.
-            base = info.filename.replace("\\", "/").rstrip("/").split("/")[-1]
-            if base.lower().endswith((".exe", ".dll", ".sys", ".bat", ".cmd", ".ps1", ".scr", ".vbs")):
-                bad.append(f"{info.filename}: programs are never installed. Be careful with any mod that ships one.")
-                continue
-            if not base.lower().endswith((".gsc", MANIFEST_SUFFIX)):
-                bad.append(f"{info.filename}: not a .gsc mod, ignored")
-                continue
-            if base in good:
-                bad.append(f"{info.filename}: another {base} is already in this zip, ignored")
-                continue
-            if info.file_size > MAX_MOD_BYTES:
-                bad.append(f"{base}: too large")
-                continue
-            data = z.read(info)
-            if base.lower().endswith(MANIFEST_SUFFIX):
-                try:
-                    man = json.loads(data.decode("utf-8"))
-                    if not isinstance(man, dict):
-                        raise ValueError
-                except ValueError:
-                    bad.append(f"{base}: not a valid manifest")
-                    continue
-                good[base] = json.dumps(clean_manifest(man), indent=4).encode("utf-8")
-                continue
-            problem = check_mod_bytes(base, data)
-            if problem:
-                bad.append(f"{base}: {problem}")
-            else:
-                good[base] = data
-    return pack_name, good, bad
+            rel = os.path.relpath(p, root).replace("\\", "/")
+            st = os.stat(p)
+            out.append({"path": rel, "folder": rel.split("/")[0] if "/" in rel else "", "name": f,
+                        "size": st.st_size, "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")})
+            if len(out) >= MAX_ASSET_LIST:
+                return out
+    return out
+
+
+def asset_file(rel):
+    """Full path of an existing file in the Assets folder; refuses anything that would land outside it."""
+    try:
+        parts = content.safe_parts(rel)
+    except ValueError:
+        parts = None
+    root = os.path.realpath(assets_dir())
+    path = os.path.join(root, *parts) if parts else ""
+    if not parts or os.path.commonpath([root, os.path.realpath(path)]) != root or not os.path.isfile(path):
+        raise ValueError("That file isn't in Kronos's Assets folder.")
+    return path
+
+
+def asset_preview(rel):
+    """{"image": data URL} for browser-viewable images, {"text": ...} for text files, else {}."""
+    path = asset_file(rel)
+    ext = os.path.splitext(path)[1].lower()
+    if ext in PREVIEW_TYPES:
+        if os.path.getsize(path) > 4 * 1024 * 1024:
+            return {}
+        with open(path, "rb") as f:
+            return {"image": f"data:{PREVIEW_TYPES[ext]};base64," + base64.b64encode(f.read()).decode()}
+    if ext in content.ASSET_EXTENSIONS - content.IMAGE_EXTENSIONS - {".bin", ".raw"}:
+        with open(path, "rb") as f:
+            data = f.read(TEXT_PREVIEW_BYTES + 1)
+        text = data[:TEXT_PREVIEW_BYTES].decode("utf-8", errors="replace")
+        return {"text": text, "cut": len(data) > TEXT_PREVIEW_BYTES} if "\x00" not in text else {}
+    return {}
+
+
+def asset_thumbs(rels, limit=256 * 1024):
+    """Small data-URL thumbnails for a batch of image assets (big or unviewable ones are left out)."""
+    out = {}
+    for rel in rels[:120]:
+        try:
+            path = asset_file(rel)
+            if os.path.splitext(path)[1].lower() in PREVIEW_TYPES and os.path.getsize(path) <= limit:
+                out[rel] = asset_preview(rel).get("image")
+        except (ValueError, OSError):
+            pass
+    return out
+
+
+def delete_asset(rel, state):
+    """Send an asset to the Recycle Bin and tidy up any folders it leaves empty."""
+    path = asset_file(rel)
+    if not recycle([path]) or os.path.exists(path):
+        raise ValueError(f"Couldn't delete {os.path.basename(path)}. Is it open in another program?")
+    root, parent = os.path.realpath(assets_dir()), os.path.dirname(path)
+    # Keep Kronos's own top-level folders (Images, Lua…) even when they end up empty.
+    while parent != root and os.path.dirname(parent) != root and os.path.commonpath([root, parent]) == root:
+        try:
+            os.rmdir(parent)
+        except OSError:
+            break
+        parent = os.path.dirname(parent)
+    if state["assets"].pop(rel, None) is not None:
+        save_state(state)
+
+
+def is_source_mod(relative):
+    return not relative.startswith("Assets/") and relative.lower().endswith(".gsc")
+
+
+def pack_destination(relative):
+    return content.destination_for(relative, scripts_dir(), assets_dir(), MANIFEST_SUFFIX)
+
+
+def read_pack(path, asset_folder=None):
+    """Validate source mods and assets, preserving each asset's folder and subfolders."""
+    return content.read_content_pack(path, check_mod_bytes, MANIFEST_SUFFIX,
+                                     clean_manifest, PACK_INFO, asset_folder)
 
 
 # Only Discord's own file servers: a pasted link can't make the app download from anywhere else.
 LINK_HOSTS = ("cdn.discordapp.com", "media.discordapp.net")
-MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
+MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 DOWNLOAD_PREFIX = "kronos-plus-dl-"
 
 
@@ -916,18 +1027,21 @@ def download_mod_link(url):
     runs the same safety checks as for files picked from disk.
     """
     parts = urllib.parse.urlsplit((url or "").strip())
-    if parts.scheme != "https" or parts.hostname not in LINK_HOSTS:
+    if (parts.scheme != "https" or parts.hostname not in LINK_HOSTS or parts.username or parts.password
+            or parts.port not in (None, 443) or not parts.path.startswith("/attachments/")):
         raise ValueError("Paste a Discord file link: right-click the file in Discord and choose Copy Link.")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", os.path.basename(urllib.parse.unquote(parts.path)))
     if name.lower().endswith((".rar", ".7z")):
         raise ValueError(f"{name} is a .rar/.7z archive, which Kronos Plus can't open. Extract it yourself and use "
                          "Add .gsc mods, or ask the author for a .zip.")
-    if not name.lower().endswith((".gsc", ".zip")):
-        raise ValueError(f"{name or 'That link'} isn't a .gsc mod or a .zip of mods.")
+    if os.path.splitext(name)[1].lower() not in ({".gsc", ".zip"} | content.ASSET_EXTENSIONS):
+        raise ValueError(f"{name or 'That link'} isn't a supported mod, asset or ZIP archive.")
     request = urllib.request.Request(parts.geturl(), headers={"User-Agent": "KronosPlus"})
     try:
         with urllib.request.urlopen(request, timeout=30) as r:
-            if urllib.parse.urlsplit(r.geturl()).hostname not in LINK_HOSTS:
+            final = urllib.parse.urlsplit(r.geturl())
+            if (final.scheme != "https" or final.hostname not in LINK_HOSTS or final.username or final.password
+                    or final.port not in (None, 443) or not final.path.startswith("/attachments/")):
                 raise ValueError("That link redirected away from Discord, so it wasn't downloaded.")
             data = r.read(MAX_DOWNLOAD_BYTES + 1)
     except urllib.error.HTTPError as e:
@@ -937,7 +1051,7 @@ def download_mod_link(url):
     except (urllib.error.URLError, OSError):
         raise ValueError("Couldn't download it. Check your internet connection and try again.")
     if len(data) > MAX_DOWNLOAD_BYTES:
-        raise ValueError("That file is too large to be a mod.")
+        raise ValueError("That file exceeds the 64 MB download limit.")
     path = os.path.join(tempfile.mkdtemp(prefix=DOWNLOAD_PREFIX), name)
     with open(path, "wb") as f:
         f.write(data)
@@ -951,7 +1065,7 @@ POST_LINK = re.compile(r"^https://(?:\w+\.)?discord(?:app)?\.com/channels/\d+/(\
 
 
 def is_post_link(url):
-    return bool(POST_LINK.match((url or "").strip()))
+    return parse_post_link(url) is not None
 
 
 def post_files(url):
@@ -963,7 +1077,10 @@ def post_files(url):
     if not POST_HELPER:
         raise ValueError("That's a link to a Discord post, not the file. Open the post, right-click its .zip or "
                          ".gsc file and choose Copy Link.")
-    thread = POST_LINK.match(url.strip()).group(1)
+    post = parse_post_link(url)
+    if not post or not post.thread:
+        raise ValueError("Copy a specific mod post link, not just the forum channel.")
+    thread = post.thread
     request = urllib.request.Request(f"{POST_HELPER}/post/{thread}", headers={"User-Agent": "KronosPlus"})
     try:
         with urllib.request.urlopen(request, timeout=20) as r:
@@ -998,7 +1115,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "1.2"  # releases are numbered 1.2, 1.3, ...
+APP_VERSION = "1.5"  # releases are numbered 1.2, 1.3, ...
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")
@@ -1144,15 +1261,7 @@ def _try_remove(p):
 
 
 def install_pack_files(files, overwrite_names=()):
-    os.makedirs(scripts_dir(), exist_ok=True)
-    for base, data in files.items():
-        dest = os.path.join(scripts_dir(), base)
-        if os.path.exists(dest):
-            if base not in overwrite_names:
-                continue
-            backup_mod_file(dest)
-        with open(dest, "wb") as f:
-            f.write(data)
+    return content.install_content_files(files, overwrite_names, pack_destination, BACKUP_DIR)
 
 
 # ---------------------------------------------------------------- settings
@@ -1753,15 +1862,15 @@ def run_ui():
         except zipfile.BadZipFile:
             messagebox.showerror("Kronos Plus", "That isn't a valid .zip file.")
             return
-        if not any(b.lower().endswith(".gsc") for b in files):
-            messagebox.showerror("Kronos Plus", "No usable .gsc mods in that pack.\n\n" + "\n".join(bad))
+        if not files:
+            messagebox.showerror("Kronos Plus", "No usable mods or assets in that pack.\n\n" + "\n".join(bad))
             return
-        existing = [b for b in files if os.path.exists(os.path.join(scripts_dir(), b))]
+        existing = [b for b in files if os.path.exists(pack_destination(b))]
         overwrite = existing if existing and messagebox.askyesno(
             "Kronos Plus", "These mods already exist:\n" + "\n".join(existing) + "\n\nReplace them? (Old ones are backed up.)") else []
         record_history(state, f"Installed pack {pack_name}")
         install_pack_files(files, overwrite)
-        names = [b[:-4] for b in files if b.lower().endswith(".gsc")]
+        names = [b[:-4] for b in files if is_source_mod(b)]
         if messagebox.askyesno("Kronos Plus", f"Installed {len(names)} mods from '{pack_name}'." +
                                (f"\nRejected:\n" + "\n".join(bad) if bad else "") +
                                f"\n\nSave them as preset '{pack_name}'?"):
