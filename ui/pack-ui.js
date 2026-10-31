@@ -14,7 +14,12 @@ const PackUI = (() => {
     if (activePlan && activePlan !== keep) request("cancel_plan", activePlan);
     activePlan = keep;
   }
-  const fileList = files => `<div class="pk-file-list">${files.map(file => `<div>${esc(file.startsWith("Assets/") ? file : "custom_scripts/" + file)}</div>`).join("")}</div>`;
+  const fileList = files => `<div class="pk-file-list">${files.map(file => `<div>${esc(file.startsWith("Assets/") ? file : file.startsWith("Game/") ? "game folder/" + file.slice(5) : "custom_scripts/" + file)}</div>`).join("")}</div>`;
+
+  // A file the app can't install stays visible but unticked, with the reason, so it's never picked by default.
+  const attachmentRow = (file, data, checked) => file.unusable
+    ? `<label class="pk-attachment" style="opacity:.55" title="${esc(file.unusable)}"><input type="checkbox" ${data} disabled><span>${esc(file.name)} <small class="muted">· ${esc(file.unusable)}</small></span></label>`
+    : `<label class="pk-attachment"><input type="checkbox" ${data} ${checked ? "checked" : ""}><span>${esc(file.name)}</span></label>`;
 
   function linkInstall(url = "", start = false, updateId = null, attachmentNames = []) {
     modal(`<h2>${updateId ? "Update pack from Discord" : "Get mods &amp; assets from Discord"}</h2>
@@ -37,11 +42,12 @@ const PackUI = (() => {
     }
     function choose(files, source) {
       stopPostImport(); busy(false);
-      if (files.length === 1) { download([files[0].url], source); return; }
-      const matches = files.filter(file => attachmentNames.includes(file.name));
-      const selected = new Set((matches.length ? matches : files).slice(0, 20).map(file => file.url));
+      if (files.length === 1 && !files[0].unusable) { download([files[0].url], source); return; }
+      const usable = files.filter(file => !file.unusable);
+      const matches = usable.filter(file => attachmentNames.includes(file.name));
+      const selected = new Set((matches.length ? matches : usable).slice(0, 20).map(file => file.url));
       pick.innerHTML = `<p class="muted">Select up to 20 attachments to install together as one pack.</p>
-        <div class="pk-file-list">${files.map((file, index) => `<label class="pk-attachment"><input type="checkbox" data-file="${index}" ${selected.has(file.url) ? "checked" : ""}><span>${esc(file.name)}</span></label>`).join("")}</div>`;
+        <div class="pk-file-list">${files.map((file, index) => attachmentRow(file, `data-file="${index}"`, selected.has(file.url))).join("")}</div>`;
       button.textContent = "Review selected";
       button.onclick = () => {
         const urls = $$("#ln-pick input:checked").map(input => files[Number(input.dataset.file)].url);
@@ -60,11 +66,12 @@ const PackUI = (() => {
     async function choosePost(pending, post) {
       if (pending.awaitingSelection || pending.selectionSent) return;
       const files = [...(post.files || []), ...(post.previews || [])];
-      if (files.length === 1) { await startPostDownload(pending, [0]); return; }
+      if (files.length === 1 && !files[0].unusable) { await startPostDownload(pending, [0]); return; }
       pending.awaitingSelection = true;
-      const matches = files.map((file, index) => attachmentNames.includes(file.name) ? index : -1).filter(index => index >= 0);
-      const selected = new Set((matches.length ? matches : files.map((_, index) => index)).slice(0, 20));
-      pick.innerHTML = `<p class="muted">Select up to 20 attachments. Code previews download automatically too.</p><div class="pk-file-list">${files.map((file, index) => `<label class="pk-attachment"><input type="checkbox" data-index="${index}" ${selected.has(index) ? "checked" : ""}><span>${esc(file.name)}</span></label>`).join("")}</div>`;
+      const usable = files.map((file, index) => file.unusable ? -1 : index).filter(index => index >= 0);
+      const matches = usable.filter(index => attachmentNames.includes(files[index].name));
+      const selected = new Set((matches.length ? matches : usable).slice(0, 20));
+      pick.innerHTML = `<p class="muted">Select up to 20 attachments. Code previews download automatically too.</p><div class="pk-file-list">${files.map((file, index) => attachmentRow(file, `data-index="${index}"`, selected.has(index))).join("")}</div>`;
       button.disabled = false; button.textContent = "Download selected";
       button.onclick = () => {
         const indices = $$("#ln-pick input:checked").map(input => Number(input.dataset.index));
@@ -167,12 +174,18 @@ const PackUI = (() => {
   async function installPack(plan, fromLink = false) {
     plan = plan || await request("pick_pack");
     if (!plan || failed(plan)) return;
-    const mods = plan.mods || [], assets = plan.assets || [];
+    const mods = plan.mods || [], assets = plan.assets || [], game = plan.game || [], gameRemoved = plan.game_removed || [];
     const kind = plan.content_kind || (mods.length && assets.length ? "mixed" : assets.length ? "assets" : mods.length ? "mods" : "empty");
     const assetCount = plan.detected_asset_count ?? assets.length;
     const noun = kind === "mods" ? mods.length === 1 ? "mod" : "mods" : kind === "assets" ? assetCount === 1 ? "asset" : "assets" : "pack";
     const targetPage = plan.content_page || (kind === "assets" ? "assets" : kind === "mods" ? "mods" : "packs");
-    const detected = [mods.length ? `${mods.length} GSC/GSCC mod${mods.length === 1 ? "" : "s"}` : "", assetCount ? `${assetCount} asset${assetCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ");
+    const detected = [mods.length ? `${mods.length} GSC/GSCC mod${mods.length === 1 ? "" : "s"}` : "", assetCount ? `${assetCount} asset${assetCount === 1 ? "" : "s"}` : "",
+      game.length ? `${game.length} game file${game.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ");
+    const gameFile = path => path.replace(/^Game\//, "");
+    const gameSection = game.length ? `<h3>Game files</h3><p class="muted">These replace the game's own files in ${esc(plan.game_folder || "the game folder")}. Kronos Plus keeps the originals and puts them back if you disable or uninstall this pack. They only work with the game version they were made for, so uninstall this pack before a game update.</p>
+      ${fileList(game)}${gameRemoved.length ? `<p class="muted">Removed while the pack is on, because the new files replace them: ${gameRemoved.map(path => `<b>${esc(gameFile(path))}</b>`).join(", ")}</p>` : ""}` : "";
+    const gameExisting = (plan.existing || []).filter(path => path.startsWith("Game/"));
+    const replaceable = (plan.existing || []).filter(path => !path.startsWith("Game/"));
     const folderFields = (plan.destinations || []).map(item => `<div class="field"><label>${esc(item.name)} destination</label><select class="input pk-destination" data-index="${esc(item.index)}"><option value="">Choose a folder…</option>${item.folders.map(folder => `<option value="${esc(folder)}" ${item.selected === folder ? "selected" : ""}>Assets/${esc(folder)}</option>`).join("")}</select></div>`).join("");
     go(targetPage);
     modal(`<h2>${plan.update_id ? "Update" : "Install"} ${noun}</h2>
@@ -182,11 +195,11 @@ const PackUI = (() => {
         ${mods.length ? `<p class="muted">GSC/GSCC mods go into custom_scripts.</p>` : ""}
         ${assets.length ? `<p class="muted">Asset folders were detected from the files${kind === "mixed" ? "; both types will be installed together" : ""}.</p>` : ""}
         ${plan.unresolved ? `<p class="muted">This is an asset, but its file type fits several folders. Choose its destination to continue.</p>${folderFields}` : folderFields ? `<details class="pk-review-details"><summary>Change asset folders</summary>${folderFields}</details>` : ""}
-        ${kind === "mixed" ? `<h3>Mods</h3>${fileList(mods)}<h3>Assets</h3>${fileList(assets)}` : fileList(plan.files || [])}
+        ${kind === "mixed" ? `${mods.length ? `<h3>Mods</h3>${fileList(mods)}` : ""}${assets.length ? `<h3>Assets</h3>${fileList(assets)}` : ""}${gameSection}` : fileList(plan.files || [])}
         ${plan.conflicts?.length ? `<details class="pk-review-details"><summary>Shared or existing files (${plan.conflicts.length})</summary><div class="pk-file-list">${plan.conflicts.map(item => `<div><b>${esc(item.path)}</b><small>Current: ${esc(item.active)}${item.owners.length ? ` · Packs: ${esc(item.owners.join(", "))}` : ""}${item.same ? " · Identical content" : ""}</small></div>`).join("")}</div></details>` : ""}
         ${plan.removed?.length ? `<details class="pk-review-details"><summary>${plan.removed.length} file(s) removed by this update</summary>${fileList(plan.removed)}</details>` : ""}
         ${plan.bad?.length ? `<details class="pk-review-details"><summary>Skipped files (${plan.bad.length})</summary><div class="pk-file-list">${plan.bad.map(text => `<div>${esc(text)}</div>`).join("")}</div></details>` : ""}
-        ${plan.existing?.length ? `<label class="pk-attachment"><input type="checkbox" id="pk-over"><span>Replace ${plan.existing.length} existing file(s); originals are retained</span></label>` : ""}
+        ${replaceable.length ? `<label class="pk-attachment"><input type="checkbox" id="pk-over"><span>Replace ${replaceable.length} existing file(s); originals are retained</span></label>` : ""}
         ${mods.length ? `<label class="pk-attachment"><input type="checkbox" id="pk-preset"><span>Also save source mods as a preset</span></label>` : ""}
         <p class="muted">You can disable or uninstall the complete pack from Packs.</p></div>
       <div class="pk-error" id="pk-error"></div><div class="actions"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="pk-go" ${!plan.files?.length || plan.unresolved ? "disabled" : ""}>${plan.update_id ? "Update" : "Install"} ${noun}</button></div>`, plan.token);
@@ -201,11 +214,13 @@ const PackUI = (() => {
     });
     $("#pk-go").onclick = async () => {
       const button = $("#pk-go"), error = $("#pk-error"); button.disabled = true;
-      const result = await request("install_pack", plan.token, $("#pk-over")?.checked ? plan.existing : [], $("#pk-preset")?.checked || false, $("#pk-name").value);
+      // Game files only ever replace the game's own files, so they're always part of the install.
+      const overwrite = [...gameExisting, ...($("#pk-over")?.checked ? replaceable : [])];
+      const result = await request("install_pack", plan.token, overwrite, $("#pk-preset")?.checked || false, $("#pk-name").value);
       if (result?.error) { if (error.isConnected) { error.textContent = result.error; button.disabled = false; } return; }
       if (result.assets) AS.openGroups.add("managed:" + result.id);
       activePlan = null; closeModal(); await refresh();
-      modal(`<h2>${plan.update_id ? "Updated" : "Installed"} “${esc(result.name)}”</h2><div class="body"><p>${result.mods} source mod(s) and ${result.assets} asset(s) in this pack.${result.skipped ? ` ${result.skipped} existing file(s) skipped.` : ""}</p>
+      modal(`<h2>${plan.update_id ? "Updated" : "Installed"} “${esc(result.name)}”</h2><div class="body"><p>${result.mods} source mod(s), ${result.assets} asset(s)${result.game ? ` and ${result.game} game file change(s)` : ""} in this pack.${result.skipped ? ` ${result.skipped} existing file(s) skipped.` : ""}</p>
         ${result.recovery ? `<p>Changes made outside Kronos Plus were retained in:<br><span class="muted">${esc(result.recovery)}</span></p>` : ""}${result.warning ? `<p>${esc(result.warning)}</p>` : ""}</div>
         <div class="actions"><button class="btn" id="pk-manage">Manage pack</button><button class="btn primary" onclick="closeModal()">Done</button></div>`);
       $("#pk-manage").onclick = () => { closeModal(); go("packs"); };
@@ -223,7 +238,7 @@ const PackUI = (() => {
     $("#profile-apply").disabled = $("#profile-delete").disabled = !profiles.length;
     $("#pack-list").innerHTML = result.packs.length ? result.packs.map(pack => `<article class="card pk-card" data-pack="${esc(pack.id)}">
       <div class="row"><h3>${icon("folder")}${esc(pack.name)}</h3><span class="pk-state ${pack.enabled ? "on" : ""}">${pack.enabled ? "Enabled" : "Disabled"}</span></div>
-      <p class="muted">${pack.mods} source mod(s) · ${pack.assets} asset(s) · ${pack.files.length} file(s)</p>
+      <p class="muted">${pack.mods} source mod(s) · ${pack.assets} asset(s)${pack.game ? ` · ${pack.game} game file(s)` : ""} · ${pack.files.length} file(s)</p>
       ${pack.conflicts.length ? `<p class="pk-conflict">${pack.conflicts.length} shared file(s). Pack priority picks which version is used</p>` : ""}
       ${pack.modified.length ? `<p class="pk-conflict">${pack.modified.length} file(s) changed outside Kronos Plus</p>` : ""}
       <div class="row pk-actions"><button class="btn sm" data-action="toggle">${pack.enabled ? "Disable" : "Enable"}</button><button class="btn sm" data-action="details">Files &amp; conflicts</button>

@@ -231,6 +231,13 @@ td.mono { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
 .setting:first-of-type { border-top: 0; }
 .setting > label:first-child { flex: 1; }
 .setting .input { width: 200px; }
+.launcher-card { grid-column: 1 / -1; }
+.launcher-location { display: flex; gap: 16px; align-items: center; }
+.launcher-location > div { flex: 1; min-width: 0; }
+.launcher-location .folder-path { margin: 0 0 8px; }
+.launcher-status { font-size: 12.5px; color: var(--text-3); }
+.launcher-status[data-valid="true"] { color: var(--ok); }
+.launcher-status[data-valid="false"] { color: var(--warn); }
 .savebar {
   position: sticky; bottom: 0; margin-top: 16px; display: none; align-items: center; gap: 12px;
   padding: 12px 16px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--ember); box-shadow: var(--shadow);
@@ -826,6 +833,13 @@ kbd { margin-left: auto; font: 11px var(--mono); color: var(--text-3); padding: 
     <!-- ================= SETTINGS ================= -->
     <section class="page" id="page-settings">
       <div class="grid2" style="align-items:start">
+        <div class="card launcher-card"><h3><svg><use href="#i-play"/></svg>Kronos launcher</h3>
+          <p class="sub">Choose KronosLauncher.exe for the Play button. Your location is saved automatically.</p>
+          <div class="launcher-location"><div>
+            <span class="folder-path" id="launcher-path">Checking launcher location…</span>
+            <div class="launcher-status" id="launcher-status" role="status" aria-live="polite"></div>
+          </div><button class="btn" id="launcher-browse"><svg><use href="#i-folder"/></svg>Browse…</button></div>
+        </div>
         <div class="card"><h3><svg><use href="#i-bolt"/></svg>Gameplay</h3><p class="sub">Kronos's own options from settings.json.</p><div id="set-game"></div></div>
         <div class="card"><h3><svg><use href="#i-sliders"/></svg>Profile &amp; keys</h3><p class="sub">Your in-game name and shortcut keys.</p><div id="set-text"></div></div>
         <div class="card"><h3><svg><use href="#i-file"/></svg>Logging</h3><p class="sub">Useful when writing or debugging mods.</p><div id="set-log"></div></div>
@@ -1457,7 +1471,33 @@ async function loadSessions() {
 }
 
 // ---------------------------------------------------------- settings
+function renderLauncherLocation(location) {
+  $("#launcher-path").textContent = location.path || "No launcher selected";
+  const status = $("#launcher-status");
+  status.dataset.valid = String(location.valid);
+  status.textContent = location.valid ? "Ready to launch" : "Launcher not found. Browse to select KronosLauncher.exe.";
+}
+async function loadLauncherLocation() {
+  try { renderLauncherLocation(await api.launcher_location()); }
+  catch (e) {
+    $("#launcher-status").dataset.valid = "false";
+    $("#launcher-status").textContent = "Couldn't check the launcher location. Try Browse again.";
+  }
+}
+$("#launcher-browse").onclick = async () => {
+  const button = $("#launcher-browse");
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    const result = await api.choose_launcher();
+    renderLauncherLocation(result);
+    if (result.error) toast(result.error, "bad");
+    else if (!result.cancelled) toast("Launcher location saved", "ok");
+  } catch (e) { toast("Couldn't select the launcher. Try Browse again.", "bad"); }
+  finally { button.disabled = false; }
+};
 async function loadSettings() {
+  await loadLauncherLocation();
   const d = await api.settings();
   if (d.error) { $("#set-game").innerHTML = `<div style="color:var(--bad)">${esc(d.error)}</div>`; return; }
   S.settings = d; S.dirty = {};
