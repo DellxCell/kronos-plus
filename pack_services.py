@@ -95,9 +95,10 @@ class PackServices:
             self._plans[token] = plan
         mods = sorted(relative for relative in files if self.core.content.is_script_mod(relative))
         assets = sorted(relative for relative in files if relative.startswith("Assets/"))
+        game = preview["game"]
         asset_count = len(assets) + sum(not item["selected"] for item in destinations)
-        kind = "mixed" if mods and asset_count else "mods" if mods else "assets" if asset_count else "empty"
-        return {"token": token, "name": name, "files": mods + assets, "mods": mods, "assets": assets,
+        kind = ("mixed" if game or (mods and asset_count) else "mods" if mods else "assets" if asset_count else "empty")
+        return {"token": token, "name": name, "files": mods + assets + game, "mods": mods, "assets": assets, "game_folder": self.core.game_dir(),
                 "content_kind": kind, "content_page": {"mods": "mods", "assets": "assets"}.get(kind, "packs"),
                 "detected_asset_count": asset_count,
                 "bad": bad, "destinations": destinations, "unresolved": any(not item["selected"] for item in destinations),
@@ -208,6 +209,7 @@ class PackServices:
                     metadata_warning = "The pack was installed, but its source-mod preset could not be saved."
             self.forget(token)
             return {**report, "mods": sum(self.core.content.is_script_mod(path) for path in installed), "assets": sum(path.startswith("Assets/") for path in installed),
+                    "game": sum(self.core.content.is_game_file(path) for path in installed),
                     "skipped": len(report["skipped"]), "warning": metadata_warning}
 
     def assets(self):

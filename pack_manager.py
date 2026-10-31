@@ -57,8 +57,9 @@ def empty_registry():
 
 
 class PackManager:
-    def __init__(self, scripts, assets, disabled, library, manifest_suffix=".kronos.json"):
+    def __init__(self, scripts, assets, disabled, library, manifest_suffix=".kronos.json", game=None):
         self.scripts, self.assets, self.disabled, self.library = map(os.path.abspath, (scripts, assets, disabled, library))
+        self.game = os.path.abspath(game) if game else None
         self.manifest_suffix = manifest_suffix
         self._thread_lock = threading.RLock()
         self._index = os.path.join(self.library, "index.json")
@@ -74,6 +75,10 @@ class PackManager:
         roots = (self.library,) if internal else (self.scripts, self.assets, self.disabled)
         path = os.path.abspath(path)
         root = next((root for root in roots if self._under(path, root)), None)
+        # In the game folder itself, only its own fastfiles; never anything else there.
+        if (not root and not internal and self.game and os.path.normcase(os.path.dirname(path)) == os.path.normcase(self.game)
+                and os.path.splitext(path)[1].lower() in content.GAME_EXTENSIONS):
+            root = self.game
         if not root:
             raise ValueError("Pack destination is outside its allowed folder")
         if not self._under(os.path.realpath(path), os.path.realpath(root)):
@@ -144,9 +149,9 @@ class PackManager:
         return self._put(data) if store else hashlib.sha256(data).hexdigest()
 
     def _locations(self, relative):
-        active = content.destination_for(relative, self.scripts, self.assets, self.manifest_suffix)
+        active = content.destination_for(relative, self.scripts, self.assets, self.manifest_suffix, self.game)
         self._safe(active)
-        if relative.startswith("Assets/"):
+        if relative.startswith(("Assets/", "Game/")):
             return {"active": active}
         disabled = content.destination_for(relative, self.disabled, self.assets, self.manifest_suffix)
         self._safe(disabled)
@@ -174,7 +179,8 @@ class PackManager:
                 raise ValueError("Invalid pack record")
             for relative, digest in pack["files"].items():
                 self._locations(relative)
-                self._blob_path(digest)
+                if digest is not None or not content.is_game_file(relative):
+                    self._blob_path(digest)
                 if relative not in data["bases"]:
                     raise ValueError("A pack is missing its original-file record")
         for relative, snapshot in data["bases"].items():
@@ -260,7 +266,7 @@ class PackManager:
             if not pack["enabled"]:
                 continue
             for relative, digest in pack["files"].items():
-                if relative.startswith("Assets/"):
+                if relative.startswith(("Assets/", "Game/")):
                     result[relative] = {"active": digest}
                 else:
                     off = self._mod_name(relative).casefold() in disabled
@@ -276,7 +282,7 @@ class PackManager:
     def _canonical(self, registry, files):
         known = {relative.casefold(): relative for relative in registry["bases"]}
         output, seen = {}, set()
-        if sum(len(data) for data in files.values()) > MAX_BATCH_BYTES:
+        if sum(len(data) for data in files.values() if data is not None) > MAX_BATCH_BYTES:
             raise ValueError("The selected batch exceeds the 128 MB expanded-size limit")
         for relative, data in files.items():
             self._locations(relative)
@@ -285,7 +291,13 @@ class PackManager:
                 raise ValueError("Two selected files have the same destination")
             seen.add(key)
             relative = known.get(key, relative)
-            if relative.startswith("Assets/"):
+            if content.is_game_file(relative):
+                content.validate_game(relative, data)
+                if relative not in registry["bases"] and not any(self._live(relative).values()):
+                    raise ValueError(f"{relative[5:]} isn't one of your game's files, so the game wouldn't load it")
+            elif data is None:
+                raise ValueError("Only game patch files can be removed")
+            elif relative.startswith("Assets/"):
                 content.validate_asset(relative, data)
             elif relative.lower().endswith(".gscc"):
                 content.validate_compiled(data)
@@ -297,7 +309,18 @@ class PackManager:
                 if len(data) > content.MAX_SOURCE_BYTES or not isinstance(json.loads(data.decode("utf-8-sig")), dict):
                     raise ValueError("Invalid source manifest")
             output[relative] = data
+        # A replaced .ff no longer matches the game's .fp patch for it, so the pack removes that
+        # patch unless it ships its own. Its original is kept like any replaced file.
+        for relative in list(output):
+            if content.is_game_file(relative) and relative.lower().endswith(".ff"):
+                patch = known.get((relative[:-3] + ".fp").casefold(), relative[:-3] + ".fp")
+                if patch.casefold() not in {key.casefold() for key in output} and (patch in registry["bases"] or any(self._live(patch).values())):
+                    output[patch] = None
         return output
+
+    @staticmethod
+    def _digest(data):
+        return None if data is None else hashlib.sha256(data).hexdigest()
 
     def _script_files(self, extra=()):
         """{casefolded name: (name, main file)} for every mod: its .gsc, or its .gscc when it comes only compiled."""
@@ -361,7 +384,7 @@ class PackManager:
                 edited.append(relative)
             for slot, path in locations.items():
                 operations[path] = desired.get(slot)
-            if relative.lower().endswith(".gsc") and not relative.startswith("Assets/"):
+            if relative.lower().endswith(".gsc") and not relative.startswith(("Assets/", "Game/")):
                 previous = next((digest for digest in live.values() if digest), None)
                 following = next((digest for digest in desired.values() if digest), None)
                 if previous != following:
@@ -371,16 +394,16 @@ class PackManager:
         if profile_mods is not None:
             self._project_sources(operations, profile_mods, only_mods)
         # Moving a managed source between folders also moves its generated cache.
-        elif any(not relative.startswith("Assets/") for relative in affected):
+        elif any(not relative.startswith(("Assets/", "Game/")) for relative in affected):
             enabled = self.enabled_mods()
             for relative in affected:
-                if relative.lower().endswith((".gsc", ".gscc")) and not relative.startswith("Assets/"):
+                if relative.lower().endswith((".gsc", ".gscc")) and not relative.startswith(("Assets/", "Game/")):
                     name = self._mod_name(relative)
                     active = operations.get(os.path.join(self.scripts, relative))
                     enabled = [item for item in enabled if item.casefold() != name.casefold()]
                     if active:
                         enabled.append(name)
-            self._project_sources(operations, enabled, {self._mod_name(r) for r in affected if not r.startswith("Assets/")})
+            self._project_sources(operations, enabled, {self._mod_name(r) for r in affected if not r.startswith(("Assets/", "Game/"))})
         return operations, edited
 
     def _commit(self, before, after, operations, action, edited=()):
@@ -443,7 +466,7 @@ class PackManager:
             for relative, data in files.items():
                 live = self._live(relative)
                 owners = self._owners(registry, relative)
-                identical = hashlib.sha256(data).hexdigest() in live.values()
+                identical = self._digest(data) in live.values()
                 needs_replace = any(live.values()) and relative not in old_files and not identical
                 if needs_replace:
                     existing.append(relative)
@@ -452,7 +475,9 @@ class PackManager:
                     conflicts.append({"path": relative, "owners": [registry["packs"][key]["name"] for key in owners],
                                       "active": registry["packs"][winner]["name"] if winner else "Existing file",
                                       "replace": needs_replace, "same": identical})
-            return {"existing": existing, "conflicts": conflicts, "removed": sorted(set(old_files) - set(files))}
+            return {"existing": existing, "conflicts": conflicts, "removed": sorted(set(old_files) - set(files)),
+                    "game": sorted(relative for relative, data in files.items() if content.is_game_file(relative) and data is not None),
+                    "game_removed": sorted(relative for relative, data in files.items() if content.is_game_file(relative) and data is None)}
 
     def install(self, name, files, overwrite=(), source_post=None, attachments=(), update_id=None):
         name = str(name or "Imported pack").strip()[:120]
@@ -469,17 +494,17 @@ class PackManager:
             selected, skipped = {}, []
             for relative, data in files.items():
                 live = self._live(relative)
-                same = hashlib.sha256(data).hexdigest() in live.values()
+                same = self._digest(data) in live.values()
                 if any(live.values()) and relative not in old_files and relative.casefold() not in overwrite and not same:
                     skipped.append(relative)
                     continue
-                if relative.lower().endswith(".gsc") and not relative.startswith("Assets/") and relative not in before["bases"]:
+                if relative.lower().endswith(".gsc") and not relative.startswith(("Assets/", "Game/")) and relative not in before["bases"]:
                     for root in (self.scripts, self.disabled):
                         if os.path.isfile(os.path.join(root, relative[:-4] + ".gscc")):
                             raise ValueError(f"{relative} belongs to a prepared mod; it cannot be replaced by a source-only pack")
-                selected[relative] = self._put(data)
+                selected[relative] = None if data is None else self._put(data)
             for relative in list(selected):
-                if relative.lower().endswith(self.manifest_suffix) and not relative.startswith("Assets/"):
+                if relative.lower().endswith(self.manifest_suffix) and not relative.startswith(("Assets/", "Game/")):
                     source = relative[:-len(self.manifest_suffix)] + ".gsc"
                     if source.casefold() not in {key.casefold() for key in selected}:
                         del selected[relative]
@@ -496,7 +521,7 @@ class PackManager:
                 "attachments": list(attachments)[:20], "installed": (old_pack or {}).get("installed", now()), "updated": now()}
             if not old_pack:
                 after["order"].append(identity)
-                new_mods = {self._mod_name(relative).casefold() for relative in selected if not relative.startswith("Assets/")}
+                new_mods = {self._mod_name(relative).casefold() for relative in selected if not relative.startswith(("Assets/", "Game/"))}
                 after["source_disabled"] = [name for name in after["source_disabled"] if name not in new_mods]
             affected = set(selected) | set(old_files)
             operations, edited = self._operations(before, after, affected)
@@ -534,7 +559,7 @@ class PackManager:
             disabled = set(after["source_disabled"])
             disabled = disabled - selected if enabled else disabled | selected
             after["source_disabled"] = sorted(disabled)
-            affected = {relative for relative in before["bases"] if not relative.startswith("Assets/") and self._mod_name(relative).casefold() in selected}
+            affected = {relative for relative in before["bases"] if not relative.startswith(("Assets/", "Game/")) and self._mod_name(relative).casefold() in selected}
             mods = set(self.enabled_mods())
             mods = mods | set(names) if enabled else {name for name in mods if name.casefold() not in selected}
             operations, edited = self._operations(before, after, affected, mods, names)
@@ -544,9 +569,9 @@ class PackManager:
         with self._locked():
             before = self._read()
             after = copy.deepcopy(before)
-            all_names = {self._mod_name(relative).casefold() for relative in before["bases"] if not relative.startswith("Assets/")}
+            all_names = {self._mod_name(relative).casefold() for relative in before["bases"] if not relative.startswith(("Assets/", "Game/"))}
             after["source_disabled"] = sorted(all_names - {name.casefold() for name in names})
-            operations, edited = self._operations(before, after, {r for r in before["bases"] if not r.startswith("Assets/")}, names)
+            operations, edited = self._operations(before, after, {r for r in before["bases"] if not r.startswith(("Assets/", "Game/"))}, names)
             return self._commit(before, after, operations, "Apply source mods", edited)
 
     def save_profile(self, name):
@@ -574,7 +599,7 @@ class PackManager:
                 pack["enabled"] = identity in profile["packs"]
             order = [key for key in profile["order"] if key in after["packs"]]
             after["order"] = order + [key for key in after["order"] if key not in order]
-            managed_mods = {self._mod_name(relative).casefold() for relative in before["bases"] if not relative.startswith("Assets/")}
+            managed_mods = {self._mod_name(relative).casefold() for relative in before["bases"] if not relative.startswith(("Assets/", "Game/"))}
             after["source_disabled"] = sorted(managed_mods - {name.casefold() for name in profile["mods"]})
             operations, edited = self._operations(before, after, set(before["bases"]), profile["mods"])
             return self._commit(before, after, operations, "Apply profile", edited)
@@ -619,6 +644,7 @@ class PackManager:
                                           "active": registry["packs"][winner]["name"] if winner else "Original file"})
                 packs.append({key: value for key, value in pack.items() if key != "files"} | {
                     "files": sorted(pack["files"]), "assets": sum(key.startswith("Assets/") for key in pack["files"]),
+                    "game": sum(content.is_game_file(key) for key in pack["files"]),
                     "mods": sum(content.is_script_mod(key) for key in pack["files"]),
                     "conflicts": conflicts, "modified": modified})
             return {"packs": packs, "profiles": registry["profiles"], "owners": active_owners,

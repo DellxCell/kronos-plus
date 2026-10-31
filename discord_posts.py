@@ -19,7 +19,7 @@ import time
 import urllib.parse
 import uuid
 from dataclasses import dataclass
-from content_packs import ASSET_EXTENSIONS, IMAGE_EXTENSIONS
+from content_packs import ASSET_EXTENSIONS, GAME_EXTENSIONS, IMAGE_EXTENSIONS
 
 GUILD_ID = "1564034358094864515"
 FORUM_ID = "1564893232985415700"
@@ -27,7 +27,7 @@ ASSETS_FORUM_ID = "1564893868724588645"
 FORUM_IDS = {FORUM_ID, ASSETS_FORUM_ID}
 DISCORD_HOSTS = {"discord.com", "ptb.discord.com", "canary.discord.com", "discordapp.com"}
 FILE_HOSTS = {"cdn.discordapp.com", "media.discordapp.net"}
-FILE_EXTENSIONS = {".gsc", ".zip", ".rar", ".7z", ".gscc"} | ASSET_EXTENSIONS
+FILE_EXTENSIONS = {".gsc", ".zip", ".rar", ".7z", ".gscc"} | ASSET_EXTENSIONS | GAME_EXTENSIONS
 SNOWFLAKE = re.compile(r"\d{17,20}\Z")
 
 
@@ -239,7 +239,69 @@ def _legacy_forum(document, automation, U):
                     found.add(route.forum)
         except Exception:
             continue
+    return next(iter(found)) if len(found) == 1 else _header_forum(document, automation, U, links)
+
+
+def _header_forum(document, automation, U, links):
+    """The parent forum named in the open post's header breadcrumb, for posts the sidebar doesn't list.
+
+    The breadcrumb is a button with the forum's name; that name must match exactly one
+    Kronos #mods or #assets link in the channel list.
+    """
+    header = document.FindFirst(U.TreeScope_Descendants, automation.CreateAndCondition(
+        automation.CreatePropertyCondition(U.UIA_ControlTypePropertyId, U.UIA_GroupControlTypeId),
+        automation.CreatePropertyCondition(U.UIA_NamePropertyId, "Channel header")))
+    if not header:
+        return None
+    button = header.FindFirst(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+        U.UIA_ControlTypePropertyId, U.UIA_ButtonControlTypeId))
+    name = button.GetCurrentPropertyValue(U.UIA_NamePropertyId) if button else None
+    if not isinstance(name, str) or not name:
+        return None
+    found = set()
+    for index in range(min(links.Length, 1000)):
+        link = links.GetElement(index)
+        try:
+            if link.GetCurrentPropertyValue(U.UIA_NamePropertyId) != name + " (forum channel)":
+                continue
+            route = parse_post_link(link.GetCurrentPropertyValue(U.UIA_ValueValuePropertyId))
+            if route and route.guild == GUILD_ID and route.forum in FORUM_IDS and not route.thread:
+                found.add(route.forum)
+        except Exception:
+            continue
     return next(iter(found)) if len(found) == 1 else None
+
+
+def _loaded_messages(document, automation, U):
+    loaded = document.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+        U.UIA_ControlTypePropertyId, U.UIA_ListItemControlTypeId))
+    return [loaded.GetElement(i) for i in range(min(loaded.Length, 1000))]
+
+
+def _message_id(message, U):
+    try:
+        return message.GetCurrentPropertyValue(U.UIA_AutomationIdPropertyId) or ""
+    except Exception:
+        return ""
+
+
+def _scroll_to_start(messages, automation, U):
+    """Scroll the post's message list to its top so the opening message loads. Only scrolls."""
+    start = next((item for item in messages if _message_id(item, U).startswith("chat-messages-")), None)
+    walker, element = automation.ControlViewWalker, start
+    for _ in range(12):
+        element = walker.GetParentElement(element) if element else None
+        if not element:
+            return False
+        if element.GetCurrentPropertyValue(U.UIA_IsScrollPatternAvailablePropertyId):
+            scroller = element.GetCurrentPattern(U.UIA_ScrollPatternId).QueryInterface(U.IUIAutomationScrollPattern)
+            for _ in range(6):
+                scroller.SetScrollPercent(-1, 0)  # -1 leaves the horizontal position alone.
+                time.sleep(0.8)
+                if scroller.CurrentVerticalScrollPercent <= 0:
+                    return True
+            return True
+    return False
 
 
 def read_snapshot(target: PostLink) -> dict:
@@ -281,39 +343,44 @@ def read_snapshot(target: PostLink) -> dict:
                 continue
             if not active.thread:
                 return {"url": url}
+            def collect(messages, result):
+                for message in messages:
+                    match = re.fullmatch(r"chat-messages-(\d{17,20})-(\d{17,20})", _message_id(message, U))
+                    if not match or match[1] != active.thread or any(item["message_id"] == match[2] for item in result):
+                        continue
+                    try:
+                        links = message.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                            U.UIA_ControlTypePropertyId, U.UIA_HyperlinkControlTypeId))
+                        files = []
+                        for i in range(min(links.Length, 100)):
+                            item = attachment(value(links.GetElement(i)), allow_images=active.forum == ASSETS_FORUM_ID)
+                            if item:
+                                files.append(item)
+                        previews = []
+                        controls = message.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                            U.UIA_NamePropertyId, "Plaintext file preview controls"))
+                        for control_index in range(min(controls.Length, 20)):
+                            texts = controls.GetElement(control_index).FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
+                                U.UIA_ControlTypePropertyId, U.UIA_TextControlTypeId))
+                            for text_index in range(min(texts.Length, 100)):
+                                name = preview_name(texts.GetElement(text_index).GetCurrentPropertyValue(U.UIA_NamePropertyId))
+                                if name:
+                                    previews.append({"name": name})
+                    except Exception:
+                        continue  # Discord unloaded this message while it was being read.
+                    result.append({"thread_id": match[1], "message_id": match[2], "links": files, "previews": previews})
+                return result
+
             if target.message:
                 message = document.FindFirst(U.TreeScope_Descendants, automation.CreatePropertyCondition(
                     U.UIA_AutomationIdPropertyId, f"chat-messages-{active.thread}-{target.message}"))
-                messages = [message] if message else []
-            else:
-                # Attachments are often published as updates in replies, not in the opening message.
-                loaded = document.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
-                    U.UIA_ControlTypePropertyId, U.UIA_ListItemControlTypeId))
-                messages = [loaded.GetElement(i) for i in range(min(loaded.Length, 1000))]
-            result = []
-            for message in messages:
-                identity = message.GetCurrentPropertyValue(U.UIA_AutomationIdPropertyId)
-                match = re.fullmatch(r"chat-messages-(\d{17,20})-(\d{17,20})", identity or "")
-                if not match or match[1] != active.thread:
-                    continue
-                links = message.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
-                    U.UIA_ControlTypePropertyId, U.UIA_HyperlinkControlTypeId))
-                files = []
-                for i in range(min(links.Length, 100)):
-                    item = attachment(value(links.GetElement(i)), allow_images=active.forum == ASSETS_FORUM_ID)
-                    if item:
-                        files.append(item)
-                previews = []
-                controls = message.FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
-                    U.UIA_NamePropertyId, "Plaintext file preview controls"))
-                for control_index in range(min(controls.Length, 20)):
-                    texts = controls.GetElement(control_index).FindAll(U.TreeScope_Descendants, automation.CreatePropertyCondition(
-                        U.UIA_ControlTypePropertyId, U.UIA_TextControlTypeId))
-                    for text_index in range(min(texts.Length, 100)):
-                        name = preview_name(texts.GetElement(text_index).GetCurrentPropertyValue(U.UIA_NamePropertyId))
-                        if name:
-                            previews.append({"name": name})
-                result.append({"thread_id": match[1], "message_id": match[2], "links": files, "previews": previews})
+                return {"url": url, "messages": collect([message] if message else [], [])}
+            # Attachments are often published as updates in replies, not in the opening message.
+            messages = _loaded_messages(document, automation, U)
+            result = collect(messages, [])
+            # Discord opens a post at its newest replies, but the main download is usually in the opening message.
+            if not any(item["message_id"] == active.thread for item in result) and _scroll_to_start(messages, automation, U):
+                collect(_loaded_messages(document, automation, U), result)
             return {"url": url, "messages": result}
         except Exception:
             continue

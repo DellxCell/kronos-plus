@@ -1019,9 +1019,9 @@ def pack_manager():
     from pack_manager import PackManager
     global _PACK_MANAGER
     paths = (scripts_dir(), assets_dir(), disabled_dir(), pack_library_dir())
-    if _PACK_MANAGER is None or getattr(_PACK_MANAGER, "_configuration", None) != paths:
-        _PACK_MANAGER = PackManager(*paths, manifest_suffix=MANIFEST_SUFFIX)
-        _PACK_MANAGER._configuration = paths
+    if _PACK_MANAGER is None or getattr(_PACK_MANAGER, "_configuration", None) != (*paths, game_dir()):
+        _PACK_MANAGER = PackManager(*paths, manifest_suffix=MANIFEST_SUFFIX, game=game_dir())
+        _PACK_MANAGER._configuration = (*paths, game_dir())
     return _PACK_MANAGER
 
 
@@ -1147,8 +1147,8 @@ def download_mod_link(url):
             or parts.port not in (None, 443) or not parts.path.startswith("/attachments/")):
         raise ValueError("Paste a Discord file link: right-click the file in Discord and choose Copy Link.")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", os.path.basename(urllib.parse.unquote(parts.path)))
-    if os.path.splitext(name)[1].lower() not in ({".gsc", ".gscc"} | content.ARCHIVE_EXTENSIONS | content.ASSET_EXTENSIONS):
-        raise ValueError(f"{name or 'That link'} isn't a supported mod, asset or ZIP/7z/RAR archive.")
+    if os.path.splitext(name)[1].lower() not in ({".gsc", ".gscc"} | content.ARCHIVE_EXTENSIONS | content.ASSET_EXTENSIONS | content.GAME_EXTENSIONS):
+        raise ValueError(f"{name or 'That link'} isn't a supported mod, asset, game file or ZIP/7z/RAR archive.")
     request = urllib.request.Request(parts.geturl(), headers={"User-Agent": "KronosPlus"})
     try:
         with urllib.request.urlopen(request, timeout=30) as r:
@@ -1228,7 +1228,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")

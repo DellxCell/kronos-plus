@@ -455,6 +455,12 @@ class Api:
     def post_link_status(self, job, update_id=None):
         """Attachment discovery in the existing Discord window; no account token is read."""
         result = self._automatic_posts().status(job) or self._post_importer.status(job)
+        for item in result.get("files") or []:
+            # Game files only work under the exact name of one the game has (posts often hold renamed backups).
+            name = item.get("name", "") if isinstance(item, dict) else ""
+            if (os.path.splitext(name)[1].lower() in core.content.GAME_EXTENSIONS
+                    and not os.path.isfile(os.path.join(core.game_dir(), os.path.basename(name)))):
+                item["unusable"] = "Not one of your game's files, so the game wouldn't load it"
         if result.get("status") in {"ready", "downloaded"} and getattr(self, "_window", None):
             try:
                 self._window.restore()
@@ -570,7 +576,7 @@ class Api:
 
     def pick_pack(self):
         import webview
-        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.gscc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.gscc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents;*.ff;*.fp)",))
         return self.prepare_files(list(paths)) if paths else None
 
     def _describe_pack(self, path, asset_folder=None):
@@ -718,6 +724,40 @@ class Api:
         }
 
     # ---------------------------------------------------------- settings
+
+    def launcher_location(self):
+        """Report the same launcher Play will use, even when game settings cannot load."""
+        launcher = core.launcher_path(self._state)
+        return {"path": launcher or self._state.get("launcher") or "", "valid": bool(launcher)}
+
+    def choose_launcher(self):
+        """Locate the native launcher and remember it independently of game settings."""
+        import webview
+        current = self.launcher_location()
+        directory = os.path.dirname(current["path"])
+        if not os.path.isdir(directory):
+            directory = ""
+        try:
+            picked = self._dialog(webview.OPEN_DIALOG, directory=directory,
+                                  file_types=("Kronos launcher (*.exe)",))
+            if not picked:
+                return {**current, "cancelled": True}
+            path = picked[0] if isinstance(picked, (list, tuple)) else picked
+            path = os.path.abspath(path)
+            if os.path.basename(path).casefold() != "kronoslauncher.exe":
+                return {**current, "error": "Choose KronosLauncher.exe, the native Kronos launcher."}
+            if not os.path.isfile(path):
+                return {**current, "error": "That launcher could not be found. Browse to its current location."}
+            previous = self._state.get("launcher")
+            self._state["launcher"] = path
+            try:
+                core.save_state(self._state)
+            except (OSError, ValueError):
+                self._state["launcher"] = previous
+                raise
+            return self.launcher_location()
+        except (OSError, ValueError) as error:
+            return {**current, "error": f"Couldn't save the launcher location: {error}"}
 
     def settings(self):
         try:
@@ -867,17 +907,24 @@ class Api:
 
     def launch(self):
         """Start the game through the configured Kronos launcher's own Play button."""
+        try:
+            return self._launch()
+        except Exception as error:
+            import traceback
+            traceback.print_exc()  # in the .exe this lands in kronos_plus.log
+            return {"error": f"Couldn't start the game through Kronos ({type(error).__name__}: {error})."}
+
+    def _launch(self):
         if "cod25-cod.exe" in core.running_processes():
             return {"status": "playing"}
         launcher = core.launcher_path(self._state)
         if not launcher:
-            import webview
-            picked = self._dialog(webview.OPEN_DIALOG, file_types=("Kronos launcher (KronosLauncher.exe)",))
-            if not picked:
-                return {"error": "Couldn't find KronosLauncher.exe. Pick it to play from here."}
-            launcher = picked[0] if isinstance(picked, (list, tuple)) else picked
-            self._state["launcher"] = launcher
-            core.save_state(self._state)
+            located = self.choose_launcher()
+            if located.get("error"):
+                return located
+            if located.get("cancelled") or not located.get("valid"):
+                return {"error": "Choose KronosLauncher.exe in Settings → Kronos launcher, then try Play again."}
+            launcher = located["path"]
         return core.launch_game(launcher)
 
 

@@ -27,7 +27,8 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 - Packs: every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post
 - Profiles: save your whole setup, mods and packs, and switch in one click
 - Add mods & packs: drop in or Ctrl+V .gsc or precompiled .gscc files, assets or a whole .zip, .7z or .rar pack; it works out what's a mod and what's an asset
-- Play in one click: every mod is compiled and checked, then the game starts through Kronos's launcher
+- Game-file mods: packs that replace the game's .ff files install into your Kronos game folder with the originals kept, so disabling or uninstalling puts them back
+- Play in one click: every mod is compiled and checked, then the game starts through Kronos's launcher (pick its location in Settings if it isn't found)
 - Safe mode: all mods off in one click, back on when you're done
 - Find the crashing mod: a guided search that narrows it down for you
 - Crash suspects & play history: see which mods were on when the game crashed

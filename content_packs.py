@@ -29,6 +29,10 @@ DEFAULT_FOLDERS = {".lua": "Lua", **{ext: "Images" for ext in IMAGE_EXTENSIONS},
                    ".csv": "StringTable", ".tsv": "StringTable", ".csc": "Scripts",
                    ".mapents": "MapEnts", ".ents": "MapEnts", ".raw": "Rawfiles", ".bin": "Rawfiles",
                    ".cfg": "Rawfiles", ".ini": "Rawfiles", ".xml": "Rawfiles"}
+# Game fastfiles replace the game's own files in the game folder; .fp files patch the .ff of the same name.
+GAME_EXTENSIONS = {".ff", ".fp"}
+GAME_MAGIC = {".ff": b"IWffa", ".fp": b"IWffd"}
+MAX_GAME_BYTES = 64 * 1024 * 1024
 MAX_ASSET_BYTES = 32 * 1024 * 1024
 MAX_EXPANDED_BYTES = 128 * 1024 * 1024
 MAX_ARCHIVE_FILES = 5000
@@ -89,6 +93,8 @@ def classify_archive_path(name, manifest_suffix, pack_label="Imported icons"):
     if base.lower().endswith((".gsc", ".gscc", manifest_suffix)):
         return base
     extension = os.path.splitext(base)[1].lower()
+    if extension in GAME_EXTENSIONS:
+        return "Game/" + base
     if extension in IMAGE_EXTENSIONS:
         bucket_index = next((i for i, part in enumerate(folded[:-1]) if part in {"perks", "powerups"}), None)
         bucket = folded[bucket_index] if bucket_index is not None else image_bucket(base)
@@ -141,6 +147,25 @@ def validate_asset(relative, data):
                 raise ValueError("Asset is not valid JSON") from None
 
 
+def is_game_file(relative):
+    return relative.startswith("Game/")
+
+
+def validate_game(relative, data):
+    parts = safe_parts(relative)
+    extension = os.path.splitext(parts[-1])[1].lower()
+    if len(parts) != 2 or parts[0] != "Game" or extension not in GAME_EXTENSIONS:
+        raise ValueError("Unknown game file destination")
+    if data is None:
+        if extension != ".fp":
+            raise ValueError("Only patch (.fp) files can be removed")
+        return
+    if len(data) > MAX_GAME_BYTES:
+        raise ValueError("Game file exceeds the 64 MB file limit")
+    if not data.startswith(GAME_MAGIC[extension]):
+        raise ValueError(f"File data is not a BO7 {extension} fastfile")
+
+
 def is_script_mod(relative):
     return not relative.startswith("Assets/") and relative.lower().endswith((".gsc", ".gscc"))
 
@@ -160,6 +185,12 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
             data = file.read(MAX_ASSET_BYTES + 1)
         validate_compiled(data)
         return name, {target: data}, []
+    if os.path.splitext(path)[1].lower() in GAME_EXTENSIONS:
+        target = "Game/" + safe_parts(os.path.basename(path))[0]
+        with open(path, "rb") as file:
+            data = file.read(MAX_GAME_BYTES + 1)
+        validate_game(target, data)
+        return name, {target: data}, []
     if os.path.splitext(path)[1].lower() not in ARCHIVE_EXTENSIONS:
         target = asset_target(os.path.basename(path), asset_folder)
         with open(path, "rb") as file:
@@ -171,6 +202,12 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
         entries = archive.infolist()
         if len(entries) > MAX_ARCHIVE_FILES:
             raise ValueError("Archive has too many files")
+        # Packs made for several clients keep Kronos's scripts in kronos/custom_scripts;
+        # loose copies elsewhere (a source/ folder, say) would install the same mod twice.
+        def kronos_scripts(parts):
+            folded = [part.casefold() for part in parts[:-1]]
+            return any(folded[i:i + 2] == ["kronos", "custom_scripts"] for i in range(len(folded)))
+        has_kronos_scripts = any(kronos_scripts(info.filename.replace("\\", "/").split("/")) for info in entries if not info.is_dir())
         for info in entries:
             if info.is_dir():
                 continue
@@ -180,11 +217,17 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
                     raise ValueError("Archive links are not installed")
                 if info.flag_bits & 1:
                     raise ValueError("Encrypted files are not supported")
+                if "saturn" in (part.casefold() for part in parts[:-1]):
+                    raise ValueError("Made for the Saturn client, not Kronos")
+                if (has_kronos_scripts and parts[-1].lower().endswith((".gsc", ".gscc"))
+                        and not kronos_scripts(parts) and "assets" not in (part.casefold() for part in parts)):
+                    raise ValueError("Copy of a script; the pack's Kronos version in kronos/custom_scripts is installed")
                 total += info.file_size
                 if total > MAX_EXPANDED_BYTES:
                     raise ValueError("Archive exceeds the 128 MB expanded-size limit")
-                if info.file_size > MAX_ASSET_BYTES:
-                    raise ValueError("File exceeds the 32 MB limit")
+                game = os.path.splitext(parts[-1])[1].lower() in GAME_EXTENSIONS
+                if info.file_size > (MAX_GAME_BYTES if game else MAX_ASSET_BYTES):
+                    raise ValueError("File exceeds the 64 MB limit" if game else "File exceeds the 32 MB limit")
                 if parts[-1] == pack_info:
                     if info.file_size > MAX_SOURCE_BYTES:
                         raise ValueError("Pack manifest is too large")
@@ -199,11 +242,14 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
                 if relative.casefold() in seen:
                     raise ValueError("Duplicate destination in this archive")
                 seen.add(relative.casefold())
-                limit = MAX_ASSET_BYTES if relative.startswith("Assets/") or relative.lower().endswith(".gscc") else MAX_SOURCE_BYTES
+                limit = (MAX_GAME_BYTES if is_game_file(relative) else MAX_ASSET_BYTES
+                         if relative.startswith("Assets/") or relative.lower().endswith(".gscc") else MAX_SOURCE_BYTES)
                 if info.file_size > limit:
                     raise ValueError("File exceeds the size limit for its type")
                 data = archive.read(info)
-                if relative.startswith("Assets/"):
+                if is_game_file(relative):
+                    validate_game(relative, data)
+                elif relative.startswith("Assets/"):
                     validate_asset(relative, data)
                 elif relative.lower().endswith(".gscc"):
                     validate_compiled(data)
@@ -224,9 +270,13 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
     return name, good, bad
 
 
-def destination_for(relative, scripts_root, assets_root, manifest_suffix):
+def destination_for(relative, scripts_root, assets_root, manifest_suffix, game_root=None):
     parts = safe_parts(relative)
-    if parts[0] == "Assets":
+    if parts[0] == "Game":
+        if not game_root or len(parts) != 2 or os.path.splitext(parts[1])[1].lower() not in GAME_EXTENSIONS:
+            raise ValueError("Unsupported game file destination")
+        root, leaf = game_root, parts[1:]
+    elif parts[0] == "Assets":
         if len(parts) < 3 or parts[1] not in ASSET_RULES:
             raise ValueError("Unknown asset destination")
         if os.path.splitext(parts[-1])[1].lower() not in ASSET_RULES[parts[1]]:
