@@ -172,14 +172,14 @@ const PackUI = (() => {
     const assetCount = plan.detected_asset_count ?? assets.length;
     const noun = kind === "mods" ? mods.length === 1 ? "mod" : "mods" : kind === "assets" ? assetCount === 1 ? "asset" : "assets" : "pack";
     const targetPage = plan.content_page || (kind === "assets" ? "assets" : kind === "mods" ? "mods" : "packs");
-    const detected = [mods.length ? `${mods.length} GSC mod${mods.length === 1 ? "" : "s"}` : "", assetCount ? `${assetCount} asset${assetCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ");
+    const detected = [mods.length ? `${mods.length} GSC/GSCC mod${mods.length === 1 ? "" : "s"}` : "", assetCount ? `${assetCount} asset${assetCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ");
     const folderFields = (plan.destinations || []).map(item => `<div class="field"><label>${esc(item.name)} destination</label><select class="input pk-destination" data-index="${esc(item.index)}"><option value="">Choose a folder…</option>${item.folders.map(folder => `<option value="${esc(folder)}" ${item.selected === folder ? "selected" : ""}>Assets/${esc(folder)}</option>`).join("")}</select></div>`).join("");
     go(targetPage);
     modal(`<h2>${plan.update_id ? "Update" : "Install"} ${noun}</h2>
       <div class="field"><label for="pk-name">Pack name</label><input class="input" id="pk-name" maxlength="120" value="${esc(plan.reviewName || plan.name)}"></div>
       <div class="body">
         <p><b>${detected ? `Detected automatically: ${detected}` : "No supported files found"}</b></p>
-        ${mods.length ? `<p class="muted">GSC mods go into custom_scripts.</p>` : ""}
+        ${mods.length ? `<p class="muted">GSC/GSCC mods go into custom_scripts.</p>` : ""}
         ${assets.length ? `<p class="muted">Asset folders were detected from the files${kind === "mixed" ? "; both types will be installed together" : ""}.</p>` : ""}
         ${plan.unresolved ? `<p class="muted">This is an asset, but its file type fits several folders. Choose its destination to continue.</p>${folderFields}` : folderFields ? `<details class="pk-review-details"><summary>Change asset folders</summary>${folderFields}</details>` : ""}
         ${kind === "mixed" ? `<h3>Mods</h3>${fileList(mods)}<h3>Assets</h3>${fileList(assets)}` : fileList(plan.files || [])}
