@@ -1125,7 +1125,7 @@ def download_mod_link(url):
             or parts.port not in (None, 443) or not parts.path.startswith("/attachments/")):
         raise ValueError("Paste a Discord file link: right-click the file in Discord and choose Copy Link.")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", os.path.basename(urllib.parse.unquote(parts.path)))
-    if os.path.splitext(name)[1].lower() not in ({".gsc"} | content.ARCHIVE_EXTENSIONS | content.ASSET_EXTENSIONS):
+    if os.path.splitext(name)[1].lower() not in ({".gsc", ".gscc"} | content.ARCHIVE_EXTENSIONS | content.ASSET_EXTENSIONS):
         raise ValueError(f"{name or 'That link'} isn't a supported mod, asset or ZIP/7z/RAR archive.")
     request = urllib.request.Request(parts.geturl(), headers={"User-Agent": "KronosPlus"})
     try:
