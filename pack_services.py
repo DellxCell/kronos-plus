@@ -93,7 +93,7 @@ class PackServices:
                 "update_id": update_id, "attachments": [os.path.basename(path) for path in paths], "destinations": destinations}
         with self._lock:
             self._plans[token] = plan
-        mods = sorted(relative for relative in files if self.core.is_source_mod(relative))
+        mods = sorted(relative for relative in files if self.core.content.is_script_mod(relative))
         assets = sorted(relative for relative in files if relative.startswith("Assets/"))
         asset_count = len(assets) + sum(not item["selected"] for item in destinations)
         kind = "mixed" if mods and asset_count else "mods" if mods else "assets" if asset_count else "empty"
@@ -207,7 +207,7 @@ class PackServices:
                 except OSError:
                     metadata_warning = "The pack was installed, but its source-mod preset could not be saved."
             self.forget(token)
-            return {**report, "mods": len(mods), "assets": sum(path.startswith("Assets/") for path in installed),
+            return {**report, "mods": sum(self.core.content.is_script_mod(path) for path in installed), "assets": sum(path.startswith("Assets/") for path in installed),
                     "skipped": len(report["skipped"]), "warning": metadata_warning}
 
     def assets(self):

@@ -9,7 +9,7 @@ install a mod from a Discord link, and to ask GitHub if there's a new version.
 Updates: when a new version is out, Kronos Plus shows an Update now button.
 Click it and the app updates itself and opens again. Your mods stay as they are.
 
-Install a mod from Discord: right-click the mod's .gsc, .zip, .7z or .rar file in Discord,
+Install a mod from Discord: right-click the mod's .gsc, .gscc, .zip, .7z or .rar file in Discord,
 choose Copy Link, then press Ctrl+V in Kronos Plus (or Packs > Install from
 Discord link). It's safety-checked before anything is installed.
 

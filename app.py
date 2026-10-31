@@ -478,7 +478,7 @@ class Api:
         if not post.get("previews"):
             return {"error": "Open the Discord post again before choosing its preview file."}
         paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True,
-            file_types=("Mods and assets (*.gsc;*.lua;*.txt;*.json;*.csv;*.tsv;*.cfg;*.ini;*.xml;*.csc;*.ents;*.mapents;*.zip;*.7z;*.rar)",))
+            file_types=("Mods and assets (*.gsc;*.gscc;*.lua;*.txt;*.json;*.csv;*.tsv;*.cfg;*.ini;*.xml;*.csc;*.ents;*.mapents;*.zip;*.7z;*.rar)",))
         if not paths:
             return None
         if self._automatic_posts().status(job):
@@ -570,7 +570,7 @@ class Api:
 
     def pick_pack(self):
         import webview
-        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.gscc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents)",))
         return self.prepare_files(list(paths)) if paths else None
 
     def _describe_pack(self, path, asset_folder=None):

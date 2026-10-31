@@ -86,7 +86,7 @@ def classify_archive_path(name, manifest_suffix, pack_label="Imported icons"):
         if part in FOLDERS_BY_CASE and part != "scripts":
             return "/".join(["Assets", FOLDERS_BY_CASE[part], *parts[index + 1:]])
     base = parts[-1]
-    if base.lower().endswith((".gsc", manifest_suffix)):
+    if base.lower().endswith((".gsc", ".gscc", manifest_suffix)):
         return base
     extension = os.path.splitext(base)[1].lower()
     if extension in IMAGE_EXTENSIONS:
@@ -141,9 +141,25 @@ def validate_asset(relative, data):
                 raise ValueError("Asset is not valid JSON") from None
 
 
+def is_script_mod(relative):
+    return not relative.startswith("Assets/") and relative.lower().endswith((".gsc", ".gscc"))
+
+
+def validate_compiled(data):
+    # BO7 compiled GSC header; compiled scripts contain binary data, not UTF-8 source.
+    if len(data) < 16 or len(data) > MAX_ASSET_BYTES or not data.startswith(b"\x1aGSC\r\n\x00\x00"):
+        raise ValueError("Invalid BO7 compiled GSC script")
+
+
 def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_info, asset_folder=None):
     name = os.path.splitext(os.path.basename(path))[0]
     archive_label = name
+    if path.lower().endswith(".gscc"):
+        target = safe_parts(os.path.basename(path))[0]
+        with open(path, "rb") as file:
+            data = file.read(MAX_ASSET_BYTES + 1)
+        validate_compiled(data)
+        return name, {target: data}, []
     if os.path.splitext(path)[1].lower() not in ARCHIVE_EXTENSIONS:
         target = asset_target(os.path.basename(path), asset_folder)
         with open(path, "rb") as file:
@@ -183,12 +199,14 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
                 if relative.casefold() in seen:
                     raise ValueError("Duplicate destination in this archive")
                 seen.add(relative.casefold())
-                limit = MAX_ASSET_BYTES if relative.startswith("Assets/") else MAX_SOURCE_BYTES
+                limit = MAX_ASSET_BYTES if relative.startswith("Assets/") or relative.lower().endswith(".gscc") else MAX_SOURCE_BYTES
                 if info.file_size > limit:
                     raise ValueError("File exceeds the size limit for its type")
                 data = archive.read(info)
                 if relative.startswith("Assets/"):
                     validate_asset(relative, data)
+                elif relative.lower().endswith(".gscc"):
+                    validate_compiled(data)
                 elif relative.lower().endswith(manifest_suffix):
                     manifest = json.loads(data.decode("utf-8-sig"))
                     if not isinstance(manifest, dict):
@@ -214,7 +232,7 @@ def destination_for(relative, scripts_root, assets_root, manifest_suffix):
         if os.path.splitext(parts[-1])[1].lower() not in ASSET_RULES[parts[1]]:
             raise ValueError("Unsupported asset file type")
         root, leaf = assets_root, parts[1:]
-    elif len(parts) == 1 and relative.lower().endswith((".gsc", manifest_suffix)):
+    elif len(parts) == 1 and relative.lower().endswith((".gsc", ".gscc", manifest_suffix)):
         root, leaf = scripts_root, parts
     else:
         raise ValueError("Unsupported installation destination")

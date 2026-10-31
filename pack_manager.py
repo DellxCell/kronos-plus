@@ -156,7 +156,7 @@ class PackManager:
         return {slot: self._file_hash(path, store) for slot, path in self._locations(relative).items()}
 
     def _mod_name(self, relative):
-        return relative[:-len(self.manifest_suffix)] if relative.lower().endswith(self.manifest_suffix) else relative[:-4]
+        return relative[:-len(self.manifest_suffix)] if relative.lower().endswith(self.manifest_suffix) else os.path.splitext(relative)[0]
 
     def _read(self):
         if not os.path.isfile(self._index):
@@ -263,7 +263,7 @@ class PackManager:
                 if relative.startswith("Assets/"):
                     result[relative] = {"active": digest}
                 else:
-                    off = self._mod_name(relative).casefold() in disabled
+                    off = not relative.lower().endswith(".gscc") and self._mod_name(relative).casefold() in disabled
                     result[relative] = {"active": None if off else digest, "disabled": digest if off else None}
         return result
 
@@ -287,6 +287,8 @@ class PackManager:
             relative = known.get(key, relative)
             if relative.startswith("Assets/"):
                 content.validate_asset(relative, data)
+            elif relative.lower().endswith(".gscc"):
+                content.validate_compiled(data)
             elif relative.lower().endswith(".gsc"):
                 if len(data) > content.MAX_SOURCE_BYTES or b"\x00" in data or data.startswith(b"MZ"):
                     raise ValueError("Invalid source script")
@@ -611,7 +613,7 @@ class PackManager:
                                           "active": registry["packs"][winner]["name"] if winner else "Original file"})
                 packs.append({key: value for key, value in pack.items() if key != "files"} | {
                     "files": sorted(pack["files"]), "assets": sum(key.startswith("Assets/") for key in pack["files"]),
-                    "mods": sum(not key.startswith("Assets/") and key.lower().endswith(".gsc") for key in pack["files"]),
+                    "mods": sum(content.is_script_mod(key) for key in pack["files"]),
                     "conflicts": conflicts, "modified": modified})
             return {"packs": packs, "profiles": registry["profiles"], "owners": active_owners,
                     "managed_paths": list(registry["bases"]), "library": self.library}
