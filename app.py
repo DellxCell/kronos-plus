@@ -252,7 +252,7 @@ class Api:
         for n, on, d in core.list_mods():
             man = core.load_manifest(n) or {}
             mods.append({"name": n, "title": s["names"].get(n, ""), "enabled": on, "desc": d, "prepared": core.is_prepared(n),
-                         "kronos": n in bundled,
+                         "kronos": n in bundled, "file": n + (".gsc" if core.mod_path(n) else ".gscc"),
                          "version": man.get("version", ""), "author": man.get("author", "")})
         banners = []
         if s.get("test_alone"):

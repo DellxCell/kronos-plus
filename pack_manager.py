@@ -263,7 +263,7 @@ class PackManager:
                 if relative.startswith("Assets/"):
                     result[relative] = {"active": digest}
                 else:
-                    off = not relative.lower().endswith(".gscc") and self._mod_name(relative).casefold() in disabled
+                    off = self._mod_name(relative).casefold() in disabled
                     result[relative] = {"active": None if off else digest, "disabled": digest if off else None}
         return result
 
@@ -299,25 +299,31 @@ class PackManager:
             output[relative] = data
         return output
 
+    def _script_files(self, extra=()):
+        """{casefolded name: (name, main file)} for every mod: its .gsc, or its .gscc when it comes only compiled."""
+        found = {".gsc": {}, ".gscc": {}}
+        roots = {os.path.normcase(self.scripts), os.path.normcase(self.disabled)}
+        files = [os.path.join(root, f) for root in (self.scripts, self.disabled) if os.path.isdir(root)
+                 for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
+        for path in [*files, *extra]:
+            stem, extension = os.path.splitext(os.path.basename(path))
+            if os.path.normcase(os.path.dirname(path)) in roots and extension.lower() in found:
+                found[extension.lower()].setdefault(stem.casefold(), stem)
+        names = {key: (stem, stem + ".gscc") for key, stem in found[".gscc"].items() if key not in found[".gsc"]}
+        names.update((key, (stem, stem + ".gsc")) for key, stem in found[".gsc"].items())
+        return names
+
     def _project_sources(self, operations, enabled_names, only=None):
         enabled = {name.casefold() for name in enabled_names}
-        names = {}
-        for root in (self.scripts, self.disabled):
-            if os.path.isdir(root):
-                names.update((name[:-4].casefold(), name[:-4]) for name in os.listdir(root)
-                             if name.lower().endswith(".gsc") and os.path.isfile(os.path.join(root, name)))
-        for path in operations:
-            if os.path.normcase(os.path.dirname(path)) in {os.path.normcase(self.scripts), os.path.normcase(self.disabled)} and path.lower().endswith(".gsc"):
-                name = os.path.basename(path)[:-4]
-                names.setdefault(name.casefold(), name)
+        names = self._script_files(operations)
         if only is not None:
             names = {key: name for key, name in names.items() if key in {item.casefold() for item in only}}
-        for name in names.values():
-            content.safe_parts(name + ".gsc")
-            source_paths = [os.path.join(root, name + ".gsc") for root in (self.scripts, self.disabled)]
+        for name, main in names.values():
+            content.safe_parts(main)
+            source_paths = [os.path.join(root, main) for root in (self.scripts, self.disabled)]
             values = [operations[path] if path in operations else self._file_hash(path, True) for path in source_paths]
             if sum(value is not None for value in values) > 1:
-                raise ValueError(f"{name}.gsc exists in both enabled and disabled folders; resolve that duplicate first")
+                raise ValueError(f"{main} exists in both enabled and disabled folders; resolve that duplicate first")
             digest = next((value for value in values if value is not None), None)
             if digest is None:
                 continue
@@ -328,7 +334,7 @@ class PackManager:
             for root in (self.scripts, self.disabled):
                 if os.path.isdir(root):
                     companions.update(filename for filename in os.listdir(root) if filename.startswith(name + ".")
-                                      and filename != name + ".gsc" and os.path.isfile(os.path.join(root, filename)))
+                                      and filename != main and os.path.isfile(os.path.join(root, filename)))
             companions.add("compiled/" + name + ".gscc")
             for filename in companions:
                 content.safe_parts(filename)
@@ -368,8 +374,8 @@ class PackManager:
         elif any(not relative.startswith("Assets/") for relative in affected):
             enabled = self.enabled_mods()
             for relative in affected:
-                if relative.lower().endswith(".gsc") and not relative.startswith("Assets/"):
-                    name = relative[:-4]
+                if relative.lower().endswith((".gsc", ".gscc")) and not relative.startswith("Assets/"):
+                    name = self._mod_name(relative)
                     active = operations.get(os.path.join(self.scripts, relative))
                     enabled = [item for item in enabled if item.casefold() != name.casefold()]
                     if active:
@@ -424,7 +430,7 @@ class PackManager:
                 "edited": list(edited), "backup": journal_path if any(item["before"] for item in changes) else None}
 
     def enabled_mods(self):
-        return [name[:-4] for name in os.listdir(self.scripts) if name.lower().endswith(".gsc") and os.path.isfile(os.path.join(self.scripts, name))] if os.path.isdir(self.scripts) else []
+        return [name for name, main in self._script_files().values() if os.path.isfile(os.path.join(self.scripts, main))]
 
     def preview(self, files, update_id=None):
         with self._locked():

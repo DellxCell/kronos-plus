@@ -179,23 +179,45 @@ def mod_path(name):
     return None
 
 
+def compiled_only_path(name):
+    """The .gscc of a mod that comes only compiled (no .gsc in either folder), else None."""
+    if mod_path(name):
+        return None
+    for folder in (scripts_dir(), disabled_dir()):
+        p = os.path.join(folder, name + ".gscc")
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def script_path(name):
+    """The file that makes up the mod: its .gsc, or its .gscc when it comes only compiled."""
+    return mod_path(name) or compiled_only_path(name)
+
+
 def is_prepared(name):
-    """Mods shipped with their own precompiled .gscc next to the .gsc (e.g. BO7 Mod Studio)."""
+    """Mods shipped precompiled: a .gscc next to the .gsc (e.g. BO7 Mod Studio), or a .gscc alone."""
     p = mod_path(name)
-    return bool(p) and os.path.exists(p[:-4] + ".gscc")
+    return (bool(p) and os.path.exists(p[:-4] + ".gscc")) or bool(compiled_only_path(name))
 
 
 def list_mods():
-    """[(name, enabled, description)] for every .gsc in the scripts and disabled folders."""
+    """[(name, enabled, description)] for every .gsc, and every .gscc without one, in the scripts and disabled folders."""
     mods = {}
-    for folder, enabled in ((scripts_dir(), True), (disabled_dir(), False)):
-        if not os.path.isdir(folder):
-            continue
+    folders = [(folder, enabled) for folder, enabled in ((scripts_dir(), True), (disabled_dir(), False)) if os.path.isdir(folder)]
+    for folder, enabled in folders:
         for f in os.listdir(folder):
             if f.lower().endswith(".gsc"):
                 name = f[:-4]
                 man = _manifest_at(folder, name) or {}
                 mods[name] = (name, enabled, man.get("description") or mod_description(os.path.join(folder, f)))
+    # Mods that come only compiled (e.g. from a pack) are mods too, so Safe mode and the crash search can turn them off.
+    for folder, enabled in folders:
+        for f in os.listdir(folder):
+            if f.lower().endswith(".gscc") and f[:-5] not in mods and os.path.isfile(os.path.join(folder, f)):
+                name = f[:-5]
+                man = _manifest_at(folder, name) or {}
+                mods[name] = (name, enabled, man.get("description") or "Precompiled script, no source included.")
     return sorted(mods.values(), key=lambda m: m[0].lower())
 
 
@@ -271,13 +293,13 @@ def resolve_restored_mods(skip=()):
 
 def set_mod_enabled(name, enabled):
     src, dst = (disabled_dir(), scripts_dir()) if enabled else (scripts_dir(), disabled_dir())
-    if os.path.exists(os.path.join(src, name + ".gsc")):
+    if os.path.exists(os.path.join(src, name + ".gsc")) or compiled_only_path(name) == os.path.join(src, name + ".gscc"):
         _move_mod(name, src, dst)
 
 
 def delete_mod(name):
     """Send a mod and its companion files to the Recycle Bin (a copy of the .gsc also goes to backups)."""
-    p = mod_path(name) if name in {n for n, _, _ in list_mods()} else None
+    p = script_path(name) if name in {n for n, _, _ in list_mods()} else None
     if not p:
         raise ValueError(f"{name} isn't installed.")
     folder = os.path.dirname(p)
@@ -645,7 +667,7 @@ autoexec {name}_init()
 def _check_new_name(name):
     if not MOD_NAME.fullmatch(name):
         raise ValueError("Name must be 3-41 lowercase letters, digits or _, starting with a letter.")
-    if mod_path(name):
+    if script_path(name):
         raise ValueError(f"A mod called {name} already exists.")
 
 
@@ -695,7 +717,7 @@ def _manifest_at(folder, name):
 
 
 def load_manifest(name):
-    p = mod_path(name)
+    p = script_path(name)
     return _manifest_at(os.path.dirname(p), name) if p else None
 
 
@@ -740,7 +762,7 @@ def requirements(name):
     order, todo = [], [name]
     while todo:
         n = todo.pop()
-        if n in order or not mod_path(n):
+        if n in order or not script_path(n):
             continue
         order.append(n)
         todo.extend((load_manifest(n) or {}).get("requires", []))
@@ -877,7 +899,7 @@ def lint_mod(name):
     else:
         on = set(enabled_mods())
         for r in man["requires"]:
-            if not mod_path(r):
+            if not script_path(r):
                 issues.append({"line": 0, "severity": "error", "rule": "missing-requirement",
                                "message": f"Requires {r}, which isn't installed."})
             elif name in on and r not in on:
@@ -933,7 +955,7 @@ def test_alone_start(state, name):
         return "Finish or cancel the crash search first."
     if state.get("safe_mode_saved") is not None:
         return "Turn safe mode off first."
-    if not mod_path(name):
+    if not script_path(name):
         return f"Mod {name} not found."
     if not state.get("test_alone"):
         state["test_alone"] = {"saved": enabled_mods()}
@@ -1206,7 +1228,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")

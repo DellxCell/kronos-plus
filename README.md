@@ -19,7 +19,8 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 ## Features
 
 **For players**
-- Mod manager: turn mods on/off, save presets, undo any change
+- Mod manager: turn mods on/off (precompiled .gscc ones too), save presets, undo any change
+- Refresh: the button next to Play (or F5) picks up changes made outside the app
 - Rename mods: right-click a mod (or press F2) to show it under a name you pick; the file stays the same
 - Install from Discord: paste a #mods or #assets post link (or a file link), pick the attachments you want and it downloads them, code previews included (safety-checked first)
 - Assets: browse Kronos's images, Lua and other assets with previews, add new ones, delete what you don't want
