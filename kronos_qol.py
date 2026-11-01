@@ -10,6 +10,7 @@ Run:  python kronos_qol.py            (opens the window)
 
 import base64
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -34,6 +36,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
+COMPILE_CACHE_FILE = os.path.join(DATA_DIR, "compile_cache.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 KRONOS_ROOT = r"C:\Kronos"
 LAUNCHER = os.path.join(KRONOS_ROOT, "KronosLauncher.exe")
@@ -495,9 +498,35 @@ def bisect_cancel(state):
 
 # ---------------------------------------------------------------- compile check (ACTS)
 
+_COMPILE_LOCK = threading.Lock()
+_COMPILE_CACHE = None
+COMPILE_CACHE_LIMIT = 300
+
+
+def _compile_cache():
+    global _COMPILE_CACHE
+    if _COMPILE_CACHE is None:
+        try:
+            with open(COMPILE_CACHE_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            _COMPILE_CACHE = {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str)} if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            _COMPILE_CACHE = {}
+    return _COMPILE_CACHE
+
+
+def _compile_key(name, src):
+    """What a compile result depends on: the mod's name and source, and the compiler itself."""
+    with open(src, "rb") as f:
+        source = hashlib.sha256(f.read(MAX_MOD_BYTES + 1)).hexdigest()
+    compiler = os.stat(acts_exe())
+    return f"{name}|{source}|{compiler.st_size}|{compiler.st_mtime_ns}"
+
+
 def compile_check(name):
     """Compile a mod with Kronos's bundled ACTS, like the game does at startup.
-    Returns (ok: bool|None, message); None means it couldn't be checked."""
+    Returns (ok: bool|None, message); None means it couldn't be checked.
+    A mod that compiled before is not compiled again until its source or the compiler changes."""
     if is_prepared(name):
         return None, "Prepared mod (ships its own compiled file), can't be checked from source."
     src = mod_path(name)
@@ -505,6 +534,41 @@ def compile_check(name):
         return None, "Mod file not found."
     if not os.path.isfile(acts_exe()):
         return None, "Kronos's compiler (kronos\\tools\\acts.exe) not found."
+    try:
+        key = _compile_key(name, src)
+    except OSError:
+        key = None
+    with _COMPILE_LOCK:
+        if key and key in _compile_cache():
+            return True, _compile_cache()[key]
+    ok, msg = _run_compiler(name, src)
+    # Only successes are kept, so a failure (even a one-off one) is always checked again.
+    if ok and key:
+        with _COMPILE_LOCK:
+            cache = _compile_cache()
+            cache.pop(key, None)
+            cache[key] = msg
+            for old in list(cache)[:-COMPILE_CACHE_LIMIT]:
+                del cache[old]
+            try:
+                with open(COMPILE_CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(cache, f)
+            except OSError:
+                pass
+    return ok, msg
+
+
+def compile_many(names):
+    """compile_check for several mods at once, a few compilers in parallel. {name: (ok, message)}"""
+    from concurrent.futures import ThreadPoolExecutor
+    names = list(dict.fromkeys(names))
+    if len(names) < 2:
+        return {name: compile_check(name) for name in names}
+    with ThreadPoolExecutor(max_workers=min(4, len(names), os.cpu_count() or 1)) as pool:
+        return dict(zip(names, pool.map(compile_check, names)))
+
+
+def _run_compiler(name, src):
     with tempfile.TemporaryDirectory() as tmp:
         try:
             r = subprocess.run(
@@ -1006,6 +1070,7 @@ def export_pack(zip_path, pack_name):
 
 
 _PACK_MANAGER = None
+_PACK_MANAGER_LOCK = threading.Lock()
 
 
 def pack_library_dir():
@@ -1019,10 +1084,12 @@ def pack_manager():
     from pack_manager import PackManager
     global _PACK_MANAGER
     paths = (scripts_dir(), assets_dir(), disabled_dir(), pack_library_dir())
-    if _PACK_MANAGER is None or getattr(_PACK_MANAGER, "_configuration", None) != (*paths, game_dir()):
-        _PACK_MANAGER = PackManager(*paths, manifest_suffix=MANIFEST_SUFFIX, game=game_dir())
-        _PACK_MANAGER._configuration = (*paths, game_dir())
-    return _PACK_MANAGER
+    # Locked so two threads never make two managers that would then contend for the library lock.
+    with _PACK_MANAGER_LOCK:
+        if _PACK_MANAGER is None or getattr(_PACK_MANAGER, "_configuration", None) != (*paths, game_dir()):
+            _PACK_MANAGER = PackManager(*paths, manifest_suffix=MANIFEST_SUFFIX, game=game_dir())
+            _PACK_MANAGER._configuration = (*paths, game_dir())
+        return _PACK_MANAGER
 
 
 def assets_dir():
@@ -1086,14 +1153,18 @@ def asset_preview(rel):
     return {}
 
 
-def asset_thumbs(rels, limit=256 * 1024):
-    """Small data-URL thumbnails for a batch of image assets (big or unviewable ones are left out)."""
+def asset_thumbs(rels, limit=256 * 1024, url=None):
+    """Thumbnails for a batch of image assets (big or unviewable ones are left out):
+    links from url(rel, stat) when given, else small data URLs."""
     out = {}
     for rel in rels[:120]:
         try:
             path = asset_file(rel)
-            if os.path.splitext(path)[1].lower() in PREVIEW_TYPES and os.path.getsize(path) <= limit:
-                out[rel] = asset_preview(rel).get("image")
+            if os.path.splitext(path)[1].lower() not in PREVIEW_TYPES:
+                continue
+            info = os.stat(path)
+            if info.st_size <= limit:
+                out[rel] = url(rel, info) if url else asset_preview(rel).get("image")
         except (ValueError, OSError):
             pass
     return out
@@ -1228,7 +1299,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "2.5"
+APP_VERSION = "2.6"
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")
@@ -1690,8 +1761,7 @@ def prelaunch_problems(state):
     for ok, title, detail in health_checks(state):
         if ok is False:
             problems.append(f"{title}: {detail}")
-    for name in enabled_mods():
-        ok, msg = compile_check(name)
+    for name, (ok, msg) in compile_many(enabled_mods()).items():
         if ok is False:
             problems.append(f"Mod {name} doesn't compile: {msg.splitlines()[-1] if msg else ''}")
         for issue in lint_mod(name):
@@ -1747,8 +1817,7 @@ def help_report(state, packs):
     out += ["", "Health check:"]
     for ok, title, detail in health_checks(state):
         out.append(f"  {'OK ' if ok else 'BAD' if ok is False else '?  '} {title}: {detail}")
-    for name in enabled_mods():
-        ok, msg = compile_check(name)
+    for name, (ok, msg) in compile_many(enabled_mods()).items():
         if ok is False:
             out.append(f"  BAD {name} doesn't compile: {msg.splitlines()[-1] if msg else ''}")
 
@@ -1823,7 +1892,7 @@ def _setup_files():
 def create_setup_backup(zip_path, state):
     """Zip mods, assets, the pack library, Kronos's settings.json and the app's presets and names.
     Returns what it holds."""
-    counts = {"mods": 0, "assets": 0, "files": 0, "packs": len(pack_manager().snapshot()["packs"])}
+    counts = {"mods": 0, "assets": 0, "files": 0, "packs": pack_manager().summary()["packs"]}
     temporary = zip_path + ".part"
     try:
         with pack_manager().locked(), zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as z:

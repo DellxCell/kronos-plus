@@ -63,15 +63,24 @@ class PackManager:
         self.manifest_suffix = manifest_suffix
         self._thread_lock = threading.RLock()
         self._index = os.path.join(self.library, "index.json")
+        self._hashes = {}
+        self._scope = None
 
     def _under(self, path, root):
-        path, root = os.path.abspath(path), os.path.abspath(root)
-        try:
-            return os.path.normcase(os.path.commonpath([path, root])) == os.path.normcase(root) and path != root
-        except ValueError:
-            return False
+        # A prefix test on normalized paths; much cheaper than commonpath, which this runs thousands of times.
+        path, root = os.path.normcase(os.path.abspath(path)), os.path.normcase(os.path.abspath(root))
+        return path.startswith(root.rstrip(os.sep) + os.sep) and path != root
 
-    def _safe(self, path, internal=False):
+    def _real(self, path, cached):
+        # Within one locked operation a read-only check can reuse a resolved path; writes always resolve again.
+        if not cached or self._scope is None:
+            return os.path.realpath(path)
+        known = self._scope["real"]
+        if path not in known:
+            known[path] = os.path.realpath(path)
+        return known[path]
+
+    def _safe(self, path, internal=False, cached=False):
         roots = (self.library,) if internal else (self.scripts, self.assets, self.disabled)
         path = os.path.abspath(path)
         root = next((root for root in roots if self._under(path, root)), None)
@@ -81,15 +90,25 @@ class PackManager:
             root = self.game
         if not root:
             raise ValueError("Pack destination is outside its allowed folder")
-        if not self._under(os.path.realpath(path), os.path.realpath(root)):
+        scoped = cached and self._scope is not None
+        # A cached check resolves the folder once for all its files; the loop below still refuses a linked file.
+        real = os.path.join(self._real(os.path.dirname(path), True), os.path.basename(path)) if scoped else self._real(path, cached)
+        if not self._under(real, self._real(root, cached)):
             raise ValueError("Pack destination leaves its allowed folder")
+        plain = self._scope["plain"] if scoped else None
         current = root
         for part in Path(os.path.relpath(path, root)).parts:
             current = os.path.join(current, part)
-            if os.path.lexists(current):
+            if plain is not None and current in plain:
+                continue
+            try:
                 info = os.lstat(current)
-                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-                    raise ValueError("Pack destination contains a link or junction")
+            except OSError:
+                continue
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                raise ValueError("Pack destination contains a link or junction")
+            if plain is not None and current != path:
+                plain.add(current)
         return path
 
     def _write(self, path, data, internal=False):
@@ -118,7 +137,7 @@ class PackManager:
     def _blob_path(self, digest):
         if not isinstance(digest, str) or not HASH.fullmatch(digest):
             raise ValueError("Invalid pack object identifier")
-        return self._safe(os.path.join(self.library, "objects", digest[:2], digest), internal=True)
+        return self._safe(os.path.join(self.library, "objects", digest[:2], digest), internal=True, cached=True)
 
     def _put(self, data):
         digest = hashlib.sha256(data).hexdigest()
@@ -131,31 +150,56 @@ class PackManager:
         if digest is None:
             return None
         with open(self._blob_path(digest), "rb") as file:
-            data = file.read(MAX_FILE_BYTES + 1)
+            data = self._read_limited(file)
         if len(data) > MAX_FILE_BYTES or hashlib.sha256(data).hexdigest() != digest:
             raise ValueError("A stored pack file is damaged; no game files were changed")
         return data
 
+    @staticmethod
+    def _read_limited(file):
+        # read(n) reserves n bytes up front, so read the file's own size rather than the 64 MB limit.
+        size = min(os.fstat(file.fileno()).st_size, MAX_FILE_BYTES)
+        data = file.read(size + 1)
+        # Only a file that grew since it was opened has more to read.
+        if size < len(data) <= MAX_FILE_BYTES:
+            data += file.read(MAX_FILE_BYTES + 1 - len(data))
+        return data
+
     def _file_hash(self, path, store=False):
-        self._safe(path)
-        if not os.path.exists(path):
+        self._safe(path, cached=True)
+        try:
+            info = os.stat(path)
+        except OSError:
             return None
-        if not os.path.isfile(path):
+        if not stat.S_ISREG(info.st_mode):
             raise ValueError("A pack file destination is a folder")
+        # Refreshes check every pack file; one that hasn't changed keeps its last hash.
+        key, stamp = os.path.normcase(path), (info.st_size, info.st_mtime_ns, info.st_ino)
+        cached = self._hashes.get(key)
+        if not store and cached and cached[0] == stamp:
+            return cached[1]
         with open(path, "rb") as file:
-            data = file.read(MAX_FILE_BYTES + 1)
+            data = self._read_limited(file)
         if len(data) > MAX_FILE_BYTES:
             raise ValueError("An existing file exceeds the pack manager's 64 MB file limit")
-        return self._put(data) if store else hashlib.sha256(data).hexdigest()
+        digest = self._put(data) if store else hashlib.sha256(data).hexdigest()
+        self._hashes[key] = (stamp, digest)
+        return digest
 
     def _locations(self, relative):
-        active = content.destination_for(relative, self.scripts, self.assets, self.manifest_suffix, self.game)
-        self._safe(active)
+        known = self._scope["locations"] if self._scope is not None else {}
+        if relative in known:
+            return dict(known[relative])
+        # _safe below does the same folder and link checks as destination_for, so it skips its own.
+        active = content.destination_for(relative, self.scripts, self.assets, self.manifest_suffix, self.game, checked=False)
+        self._safe(active, cached=True)
         if relative.startswith(("Assets/", "Game/")):
+            known[relative] = {"active": active}
             return {"active": active}
-        disabled = content.destination_for(relative, self.disabled, self.assets, self.manifest_suffix)
-        self._safe(disabled)
-        return {"active": active, "disabled": disabled}
+        disabled = content.destination_for(relative, self.disabled, self.assets, self.manifest_suffix, checked=False)
+        self._safe(disabled, cached=True)
+        known[relative] = {"active": active, "disabled": disabled}
+        return dict(known[relative])
 
     def _live(self, relative, store=False):
         return {slot: self._file_hash(path, store) for slot, path in self._locations(relative).items()}
@@ -163,7 +207,21 @@ class PackManager:
     def _mod_name(self, relative):
         return relative[:-len(self.manifest_suffix)] if relative.lower().endswith(self.manifest_suffix) else os.path.splitext(relative)[0]
 
-    def _read(self):
+    def _read(self, check_paths=True):
+        """The index, checked. check_paths=False skips resolving each file's destination on disk,
+        for callers that only read names and never touch those files."""
+        def locations(relative):
+            if check_paths:
+                return self._locations(relative)
+            content.safe_parts(relative)
+            return dict.fromkeys(("active",) if relative.startswith(("Assets/", "Game/")) else ("active", "disabled"))
+
+        def blob(digest):
+            if check_paths:
+                self._blob_path(digest)
+            elif not isinstance(digest, str) or not HASH.fullmatch(digest):
+                raise ValueError("Invalid pack object identifier")
+
         if not os.path.isfile(self._index):
             return empty_registry()
         with open(self._safe(self._index, True), encoding="utf-8") as file:
@@ -178,18 +236,17 @@ class PackManager:
             if not IDENTITY.fullmatch(identity) or not isinstance(pack, dict) or not isinstance(pack.get("files"), dict):
                 raise ValueError("Invalid pack record")
             for relative, digest in pack["files"].items():
-                self._locations(relative)
+                locations(relative)
                 if digest is not None or not content.is_game_file(relative):
-                    self._blob_path(digest)
+                    blob(digest)
                 if relative not in data["bases"]:
                     raise ValueError("A pack is missing its original-file record")
         for relative, snapshot in data["bases"].items():
-            locations = self._locations(relative)
-            if not isinstance(snapshot, dict) or set(snapshot) != set(locations):
+            if not isinstance(snapshot, dict) or set(snapshot) != set(locations(relative)):
                 raise ValueError("Invalid original-file record")
             for digest in snapshot.values():
                 if digest is not None:
-                    self._blob_path(digest)
+                    blob(digest)
         return data
 
     @contextlib.contextmanager
@@ -212,10 +269,15 @@ class PackManager:
                         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except OSError:
                     raise ValueError("Another Kronos Plus window is changing packs. Try again in a moment.") from None
+                outer = self._scope is None
+                if outer:
+                    self._scope = {"real": {}, "locations": {}, "plain": set()}
                 try:
                     self._recover()
                     yield
                 finally:
+                    if outer:
+                        self._scope = None
                     lock.seek(0)
                     if os.name == "nt":
                         msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
@@ -620,17 +682,30 @@ class PackManager:
             after["packs"][identity]["source_post"] = source_post
             self._commit(before, after, {}, "Set pack source")
 
+    def summary(self):
+        """Packs, managed paths and active owners from the index alone, without checking files on disk."""
+        with self._locked():
+            registry = self._read(check_paths=False)
+            packs = [{"id": key, "name": registry["packs"][key]["name"], "enabled": registry["packs"][key]["enabled"],
+                      "files": sorted(registry["packs"][key]["files"])} for key in registry["order"]]
+            return {"packs": len(packs), "pack_list": packs, "managed_paths": list(registry["bases"]),
+                    "owners": self._active_owners(registry)}
+
+    def _active_owners(self, registry):
+        owners = {}
+        for relative in registry["bases"]:
+            winner = self._winner(registry, relative)
+            if winner:
+                owners[relative] = {"id": winner, "name": registry["packs"][winner]["name"]}
+        return owners
+
     def snapshot(self):
         with self._locked():
-            registry = self._read()
+            # Only pack files are read below, and _live checks each of those paths itself.
+            registry = self._read(check_paths=False)
             expected = self._compose(registry)
             packs = []
-            active_owners = {}
-            for relative in registry["bases"]:
-                winner = self._winner(registry, relative)
-                if winner:
-                    pack = registry["packs"][winner]
-                    active_owners[relative] = {"id": winner, "name": pack["name"]}
+            active_owners = self._active_owners(registry)
             for identity in registry["order"]:
                 pack = registry["packs"][identity]
                 modified, conflicts = [], []

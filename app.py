@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.parse
 
 # Accessibility helpers are isolated children, not additional app windows.
@@ -26,6 +27,7 @@ if ((len(sys.argv) == 4 and sys.argv[1] == "--read-discord-post")
     raise SystemExit(download_main(*sys.argv[2:]))
 
 import kronos_qol as core
+from asset_server import AssetServer
 from discord_posts import DesktopPostImporter
 from pack_services import PackServices, source_link
 from post_downloads import AutomaticPostDownloads
@@ -227,7 +229,7 @@ class Api:
     def _resolve_restored(self):
         """Turn Kronos's own mods back off after its launcher put them back (see core.resolve_restored_mods)."""
         try:
-            managed = self._pack_services().snapshot()["managed_paths"]
+            managed = self._pack_services().summary()["managed_paths"]
         except (ValueError, OSError):
             return []
         packed = {p[:-4] for p in managed if core.is_source_mod(p)}
@@ -284,7 +286,7 @@ class Api:
             "devMode": s["dev_mode"],
             "appVersion": core.APP_VERSION,
             "assetCount": len(core.list_assets()),
-            "packCount": len(self._pack_services().snapshot()["packs"]),
+            "packCount": self._pack_services().summary()["packs"],
             "testAlone": s.get("test_alone"),
             "playMinutes": total,
             "sessionCount": len(s["sessions"]),
@@ -379,11 +381,7 @@ class Api:
 
     def compile(self, names):
         names = names or core.enabled_mods()
-        out = []
-        for n in names:
-            ok, msg = core.compile_check(n)
-            out.append({"name": n, "ok": ok, "msg": msg})
-        return out
+        return [{"name": n, "ok": ok, "msg": msg} for n, (ok, msg) in core.compile_many(names).items()]
 
     def open_mods_forum(self):
         open_discord(MODS_FORUM)
@@ -520,7 +518,29 @@ class Api:
         return self._pack_services().assets()
 
     def asset_thumbs(self, rels):
-        return core.asset_thumbs(list(rels or []))
+        return core.asset_thumbs(list(rels or []), url=self._asset_links())
+
+    def _asset_links(self):
+        # Thumbnails load from a localhost server; if it can't start, they fall back to data URLs.
+        if not hasattr(self, "_asset_server"):
+            try:
+                self._asset_server = AssetServer(core.asset_file, core.PREVIEW_TYPES)
+            except OSError:
+                self._asset_server = None
+        return self._asset_server.url if self._asset_server else None
+
+    def _warm_up(self):
+        # Read every pack file once in the background, so the first visit to Packs is as quick as later ones.
+        def run():
+            try:
+                self._pack_services().snapshot()
+            except (ValueError, OSError):
+                pass
+        threading.Thread(target=run, daemon=True).start()
+
+    def _close_asset_server(self):
+        if getattr(self, "_asset_server", None):
+            self._asset_server.close()
 
     def asset_preview(self, rel):
         try:
@@ -642,7 +662,7 @@ class Api:
 
     def help_report(self):
         try:
-            return {"text": core.help_report(self._state, self._pack_services().snapshot()["packs"])}
+            return {"text": core.help_report(self._state, self._pack_services().summary()["pack_list"])}
         except (ValueError, OSError) as e:
             return {"error": f"Couldn't make the report: {e}"}
 
@@ -1019,9 +1039,11 @@ def main():
         background_color="#0f1115",
     )
     window.events.shown += set_window_icon
+    window.events.loaded += api._warm_up
     window.events.closed += api._automatic_posts().close
     window.events.closed += api._post_importer.close
     window.events.closed += api._pack_services().close
+    window.events.closed += api._close_asset_server
     api._window = window  # private: pywebview would otherwise crawl the whole window object
     try:
         webview.start(gui="edgechromium", debug="--debug" in sys.argv)

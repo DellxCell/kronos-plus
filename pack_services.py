@@ -34,6 +34,9 @@ class PackServices:
     def snapshot(self):
         return self.manager.snapshot()
 
+    def summary(self):
+        return self.manager.summary()
+
     def prepare(self, paths, folders=None, source_post=None, update_id=None, token=None):
         paths = list(paths or [])
         if not paths or len(paths) > 20:
@@ -213,7 +216,7 @@ class PackServices:
                     "skipped": len(report["skipped"]), "warning": metadata_warning}
 
     def assets(self):
-        snapshot = self.snapshot()
+        snapshot = self.summary()
         known = {path.casefold() for path in snapshot["managed_paths"]}
         owners = {path.casefold(): value for path, value in snapshot["owners"].items()}
         items = self.core.list_assets()

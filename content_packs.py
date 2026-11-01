@@ -276,7 +276,8 @@ def read_content_pack(path, check_source, manifest_suffix, clean_manifest, pack_
     return name, good, bad
 
 
-def destination_for(relative, scripts_root, assets_root, manifest_suffix, game_root=None):
+def destination_for(relative, scripts_root, assets_root, manifest_suffix, game_root=None, checked=True):
+    """checked=False skips the on-disk checks, for a caller that runs its own right after."""
     parts = safe_parts(relative)
     if parts[0] == "Game":
         if not game_root or len(parts) != 2 or os.path.splitext(parts[1])[1].lower() not in GAME_EXTENSIONS:
@@ -294,6 +295,8 @@ def destination_for(relative, scripts_root, assets_root, manifest_suffix, game_r
         raise ValueError("Unsupported installation destination")
     root = os.path.abspath(root)
     destination = os.path.join(root, *leaf)
+    if not checked:
+        return destination
     resolved_root, resolved_destination = os.path.realpath(root), os.path.realpath(destination)
     if os.path.commonpath([resolved_root, resolved_destination]) != resolved_root or resolved_destination == resolved_root:
         raise ValueError("Destination leaves the selected folder")
