@@ -23,7 +23,7 @@ Windows may say "Windows protected your PC" because the app isn't code-signed. C
 - Refresh: the button next to Play (or F5) picks up changes made outside the app
 - Rename mods: right-click a mod (or press F2) to show it under a name you pick; the file stays the same
 - Install from Discord: paste a #mods or #assets post link (or a file link), pick the attachments you want and it downloads them, code previews included (safety-checked first)
-- Assets: browse Kronos's images, Lua and other assets with previews, add new ones, delete what you don't want
+- Assets: browse Kronos's images, sounds, Lua and other assets with previews, add new ones, delete what you don't want
 - Packs: every install is one pack you can turn off, uninstall (your original files come back) or update from its Discord post
 - Profiles: save your whole setup, mods and packs, and switch in one click
 - Add mods & packs: drop in or Ctrl+V .gsc or precompiled .gscc files, assets or a whole .zip, .7z or .rar pack; it works out what's a mod and what's an asset

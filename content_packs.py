@@ -15,7 +15,10 @@ import zipfile
 from pack_archives import ARCHIVE_EXTENSIONS, open_archive
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".dds", ".tga", ".bmp", ".webp"}
+# Kronos plays sound replacements from Assets/Audio.
+AUDIO_EXTENSIONS = {".ogg"}
 ASSET_RULES = {
+    "Audio": AUDIO_EXTENSIONS,
     "Lua": {".lua"},
     "Images": IMAGE_EXTENSIONS | {".txt"},
     "Camos": {".json", ".csv", ".txt"},
@@ -25,7 +28,7 @@ ASSET_RULES = {
     "StringTable": {".csv", ".tsv", ".txt"},
 }
 ASSET_EXTENSIONS = set().union(*ASSET_RULES.values()) - {".gsc"}
-DEFAULT_FOLDERS = {".lua": "Lua", **{ext: "Images" for ext in IMAGE_EXTENSIONS},
+DEFAULT_FOLDERS = {".lua": "Lua", ".ogg": "Audio", **{ext: "Images" for ext in IMAGE_EXTENSIONS},
                    ".csv": "StringTable", ".tsv": "StringTable", ".csc": "Scripts",
                    ".mapents": "MapEnts", ".ents": "MapEnts", ".raw": "Rawfiles", ".bin": "Rawfiles",
                    ".cfg": "Rawfiles", ".ini": "Rawfiles", ".xml": "Rawfiles"}
@@ -133,6 +136,9 @@ def validate_asset(relative, data):
         }[ext]
         if not valid:
             raise ValueError("File data does not match its image extension")
+    elif ext in AUDIO_EXTENSIONS:
+        if not data.startswith(b"OggS"):
+            raise ValueError("File data is not an Ogg sound")
     elif ext not in {".bin", ".raw"}:
         try:
             text = data.decode("utf-8-sig")

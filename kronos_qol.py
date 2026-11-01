@@ -1078,7 +1078,7 @@ def asset_preview(rel):
             return {}
         with open(path, "rb") as f:
             return {"image": f"data:{PREVIEW_TYPES[ext]};base64," + base64.b64encode(f.read()).decode()}
-    if ext in content.ASSET_EXTENSIONS - content.IMAGE_EXTENSIONS - {".bin", ".raw"}:
+    if ext in content.ASSET_EXTENSIONS - content.IMAGE_EXTENSIONS - content.AUDIO_EXTENSIONS - {".bin", ".raw"}:
         with open(path, "rb") as f:
             data = f.read(TEXT_PREVIEW_BYTES + 1)
         text = data[:TEXT_PREVIEW_BYTES].decode("utf-8", errors="replace")
@@ -1228,7 +1228,7 @@ def forget_download(path):
 
 # ---------------------------------------------------------------- updates
 # The app asks GitHub for the newest release when it starts; updating only happens when the user clicks.
-APP_VERSION = "2.4"
+APP_VERSION = "2.5"
 UPDATE_API = "https://api.github.com/repos/DellxCell/kronos-plus/releases/latest"
 UPDATE_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 UPDATE_DIR = os.path.join(DATA_DIR, "update")

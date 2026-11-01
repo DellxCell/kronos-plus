@@ -576,7 +576,7 @@ class Api:
 
     def pick_pack(self):
         import webview
-        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.gscc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents;*.ff;*.fp)",))
+        paths = self._dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=("Mods and assets (*.zip;*.7z;*.rar;*.gsc;*.gscc;*.lua;*.png;*.jpg;*.jpeg;*.dds;*.tga;*.bmp;*.webp;*.csv;*.tsv;*.json;*.txt;*.cfg;*.ini;*.xml;*.raw;*.bin;*.csc;*.ents;*.mapents;*.ogg;*.ff;*.fp)",))
         return self.prepare_files(list(paths)) if paths else None
 
     def _describe_pack(self, path, asset_folder=None):
