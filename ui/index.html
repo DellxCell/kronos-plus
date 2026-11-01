@@ -1271,7 +1271,7 @@ function assetGroup(a) {
     if (parts.length === 2) return { key: "Images/root", label: "HUD & theme images", hint: "Images", rank: 2 };
   }
   const dir = assetDir(a) || "Other files";
-  const labels = { Lua: "Lua scripts", Camos: "Camos", MapEnts: "Map entities", Rawfiles: "Raw files", Scripts: "Asset scripts", StringTable: "String tables" };
+  const labels = { Audio: "Sounds", Lua: "Lua scripts", Camos: "Camos", MapEnts: "Map entities", Rawfiles: "Raw files", Scripts: "Asset scripts", StringTable: "String tables" };
   return { key: dir, label: labels[dir] || dir, hint: dir, rank: 3 };
 }
 function renderAssets() {
