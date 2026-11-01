@@ -348,7 +348,8 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 
 /* ---------- modal & toast */
 .overlay {
-  position: fixed; inset: 0; background: rgba(5, 6, 9, .55); backdrop-filter: blur(3px);
+  /* A slightly deeper tint instead of a backdrop blur, which repaints everything behind it and is slow on weak GPUs. */
+  position: fixed; inset: 0; background: rgba(5, 6, 9, .64);
   display: none; place-items: center; z-index: 50; animation: fade .15s;
 }
 .overlay.show { display: grid; }
@@ -496,7 +497,7 @@ header h1::after {
 /* right-click menu on a mod */
 :root { --hover: rgba(255, 255, 255, .06); }
 :root[data-theme="light"] { --hover: rgba(20, 24, 40, .05); }
-#mod-menu { width: 250px; padding: 6px; border-radius: 14px; backdrop-filter: blur(16px); transform-origin: top left; }
+#mod-menu { width: 250px; padding: 6px; border-radius: 14px; transform-origin: top left; }
 #mod-menu.show { animation: pop .14s ease-out; }
 @keyframes pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
 .ctx-head { display: flex; gap: 11px; align-items: center; padding: 8px 8px 11px; margin-bottom: 4px; border-bottom: 1px solid var(--glass-line); }
@@ -1244,7 +1245,7 @@ const fmtSize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : b >= 1024
 const assetDir = a => a.path.includes("/") ? a.path.slice(0, a.path.lastIndexOf("/")) : "";
 function assetThumb(a) {
   const url = AS.thumbs[a.path], ext = extOf(a.name);
-  if (url) return `<img src="${url}" alt="" loading="lazy">`;
+  if (url) return `<img src="${esc(url)}" alt="" loading="lazy" decoding="async">`;
   const kind = ext === "lua" ? "lua" : /^(png|jpe?g|webp|bmp|dds|tga)$/.test(ext) ? "img" : "data";
   return `<span class="ext ${kind}">${esc(ext.toUpperCase() || "FILE")}</span>`;
 }
@@ -1344,11 +1345,12 @@ function setAllAssetGroups(open) {
 $("#as-expand").onclick = () => setAllAssetGroups(true);
 $("#as-collapse").onclick = () => setAllAssetGroups(false);
 async function loadThumbs(paths) {
+  const byPath = new Map(AS.list.map(a => [a.path, a]));
   for (let i = 0; i < paths.length; i += 120) {
     const batch = paths.slice(i, i + 120), got = await api.asset_thumbs(batch);
     batch.forEach(p => {
       AS.thumbs[p] = got[p] || null;
-      const a = AS.list.find(x => x.path === p), t = $(`.asset[data-p="${CSS.escape(p)}"] .thumb`);
+      const a = byPath.get(p), t = $(`.asset[data-p="${CSS.escape(p)}"] .thumb`);
       if (a && t && got[p]) t.innerHTML = assetThumb(a);
     });
   }
@@ -1411,7 +1413,8 @@ async function deleteAsset(path) {
   toast(`Deleted ${a.name}`, "ok");
   loadAssets();
 }
-$("#as-search").oninput = renderAssets;
+// Rebuilding a thousand-plus tiles per keystroke stutters; wait for a pause in typing.
+$("#as-search").oninput = () => { clearTimeout(AS.searchTimer); AS.searchTimer = setTimeout(renderAssets, 150); };
 $("#as-folder").onclick = () => api.open_assets_folder();
 $("#as-add").onclick = () => installPack();
 $("#as-get").onclick = () => linkInstall(S.ov.assetsForumUrl, true);
@@ -1538,7 +1541,7 @@ async function showLog() {
   const shown = lines.filter(l => (S.logFilter === "all" || l.hit) && (!q || l.text.toLowerCase().includes(q)));
   $("#log-view").innerHTML = shown.length ? shown.map(l => l.hit ? `<span class="hit">${esc(l.text)}</span>` : esc(l.text) + "\n").join("") : "<span class='muted'>Nothing to show.</span>";
 }
-$("#log-search").oninput = showLog;
+$("#log-search").oninput = () => { clearTimeout(S.logTimer); S.logTimer = setTimeout(showLog, 150); };
 $("#log-refresh").onclick = loadLogs;
 $$("#log-filter button").forEach(b => b.onclick = () => { S.logFilter = b.dataset.f; $$("#log-filter button").forEach(x => x.classList.toggle("on", x === b)); showLog(); });
 
